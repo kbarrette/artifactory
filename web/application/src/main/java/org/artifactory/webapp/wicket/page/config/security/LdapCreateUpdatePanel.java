@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -98,6 +98,7 @@ public class LdapCreateUpdatePanel extends CreateUpdatePanel<LdapSetting> {
 
         // Ldap key
         RequiredTextField<String> ldapKeyField = new RequiredTextField<String>("key");
+        setDefaultFocusField(ldapKeyField);
         ldapKeyField.setEnabled(isCreate());// don't allow key update
         if (isCreate()) {
             ldapKeyField.add(new XsdNCNameValidator("Invalid LDAP key '%s'"));

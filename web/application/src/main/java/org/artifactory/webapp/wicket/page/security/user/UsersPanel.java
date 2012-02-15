@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -22,9 +22,9 @@ import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
-import org.artifactory.api.security.GroupInfo;
 import org.artifactory.api.security.UserGroupService;
 import org.artifactory.common.wicket.component.panel.titled.TitledPanel;
+import org.artifactory.security.GroupInfo;
 
 import java.util.List;
 
@@ -47,8 +47,8 @@ public class UsersPanel extends TitledPanel {
 
         add(new GroupManagementPanel("groupManagementPanel", this));
 
-        usersTable = new UsersTable("users",
-                new UsersTableDataProvider(usersFilterPanel, userGroupService));
+        usersTable =
+                new UsersTable("users", new UsersTableDataProvider(usersFilterPanel, userGroupService));
         add(usersTable);
     }
 
@@ -59,15 +59,18 @@ public class UsersPanel extends TitledPanel {
     static class TargetGroupDropDownChoice extends DropDownChoice<GroupInfo> {
         public TargetGroupDropDownChoice(String id, IModel<GroupInfo> model, List<GroupInfo> groups) {
             super(id, model, groups);
-            setPersistent(true);
             setOutputMarkupId(true);
+        }
+
+        @Override
+        protected CharSequence getDefaultChoice(String selectedValue) {
+            return "";
         }
     }
 
     static class FilterGroupDropDownChoice extends DropDownChoice<GroupInfo> {
         public FilterGroupDropDownChoice(String id, IModel<GroupInfo> model, List<GroupInfo> groups) {
             super(id, model, groups);
-            setPersistent(true);
             setOutputMarkupId(true);
             setNullValid(true);
         }

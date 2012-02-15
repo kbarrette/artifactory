@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -27,7 +27,7 @@ import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.common.MultiStatusHolder;
-import org.artifactory.api.config.ImportSettings;
+import org.artifactory.api.config.ImportSettingsImpl;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.search.SearchService;
 import org.artifactory.common.StatusEntry;
@@ -136,7 +136,7 @@ public abstract class BasicImportPanel extends TitledPanel {
                 status.reset();
                 status.setVerbose(verbose);
 
-                ImportSettings importSettings = new ImportSettings(folder, status);
+                ImportSettingsImpl importSettings = new ImportSettingsImpl(folder, status);
                 try {
                     importSettings.setFailIfEmpty(true);
                     importSettings.setVerbose(verbose);
@@ -192,7 +192,7 @@ public abstract class BasicImportPanel extends TitledPanel {
     }
 
     protected void refreshImportPanel(Form form, AjaxRequestTarget target) {
-        target.addComponent(form);
+        target.add(form);
         AjaxUtils.refreshFeedback(target);
     }
 

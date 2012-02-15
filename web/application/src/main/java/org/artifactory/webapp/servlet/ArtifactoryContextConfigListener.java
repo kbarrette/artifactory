@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -47,6 +47,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class ArtifactoryContextConfigListener implements ServletContextListener {
 
+    @Override
     public void contextInitialized(ServletContextEvent event) {
         final ServletContext servletContext = event.getServletContext();
 
@@ -196,6 +197,7 @@ public class ArtifactoryContextConfigListener implements ServletContextListener 
         return version;
     }
 
+    @Override
     public void contextDestroyed(ServletContextEvent event) {
         AbstractApplicationContext context = (AbstractApplicationContext) event.getServletContext().getAttribute(
                 ArtifactoryContext.APPLICATION_CONTEXT_KEY);
@@ -205,6 +207,7 @@ public class ArtifactoryContextConfigListener implements ServletContextListener 
             }
         } finally {
             event.getServletContext().removeAttribute(ArtifactoryContext.APPLICATION_CONTEXT_KEY);
+            event.getServletContext().removeAttribute(ArtifactoryHome.SERVLET_CTX_ATTR);
         }
     }
 
@@ -236,10 +239,11 @@ public class ArtifactoryContextConfigListener implements ServletContextListener 
     }
 
     /**
-     * @return True if the current jvm version is Oracle Java 7.
+     * @return True if the current jvm version Java 7 and the loop predicate hotspot optimization is on. This was fixed
+     *         in JDK 1.7.0_01.
      */
     private boolean isJava7WithLoopPredicate(Logger log) {
-        if (JdkVersion.getMajorJavaVersion() == JdkVersion.JAVA_17) {
+        if ("1.7.0".equals(JdkVersion.getJavaVersion())) {
             try {
                 List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
                 for (String argument : arguments) {

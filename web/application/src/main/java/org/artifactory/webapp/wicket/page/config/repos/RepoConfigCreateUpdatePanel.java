@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -35,13 +35,10 @@ import org.artifactory.common.wicket.component.CreateUpdateAction;
 import org.artifactory.common.wicket.component.CreateUpdatePanel;
 import org.artifactory.common.wicket.component.border.titled.TitledBorder;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
-import org.artifactory.common.wicket.component.modal.ModalHandler;
 import org.artifactory.common.wicket.component.modal.links.ModalCloseLink;
 import org.artifactory.common.wicket.util.AjaxUtils;
 import org.artifactory.descriptor.repo.RepoDescriptor;
 import org.artifactory.webapp.wicket.page.config.SchemaHelpBubble;
-import org.artifactory.webapp.wicket.panel.tabbed.StyledTabbedPanel;
-import org.artifactory.webapp.wicket.panel.tabbed.SubmittingTabbedPanel;
 import org.artifactory.webapp.wicket.util.validation.JcrNameValidator;
 import org.artifactory.webapp.wicket.util.validation.ReservedPathPrefixValidator;
 import org.artifactory.webapp.wicket.util.validation.UniqueXmlIdValidator;
@@ -73,12 +70,15 @@ public abstract class RepoConfigCreateUpdatePanel<E extends RepoDescriptor> exte
     protected RepoConfigCreateUpdatePanel(CreateUpdateAction action, E repoDescriptor,
             CachingDescriptorHelper cachingDescriptorHelper) {
         super(action, repoDescriptor);
+
         this.cachingDescriptorHelper = cachingDescriptorHelper;
         form.setOutputMarkupId(true);
         add(new CssClass("repo-config"));
         setWidth(650);
         TitledBorder repoConfigBorder = new TitledBorder("repoConfigBorder");
         TextField<String> repoKeyField = new TextField<String>("key", new PropertyModel<String>(this, "key"));
+        setDefaultFocusField(repoKeyField);
+
         boolean create = isCreate();
         repoKeyField.setEnabled(create);// don't allow key update
         if (create) {
@@ -93,17 +93,7 @@ public abstract class RepoConfigCreateUpdatePanel<E extends RepoDescriptor> exte
         repoConfigBorder.add(repoKeyField);
         repoConfigBorder.add(new SchemaHelpBubble("key.help"));
 
-        StyledTabbedPanel repoConfigTabbedPanel =
-                new SubmittingTabbedPanel("repoConfigTabbedPanel", getConfigurationTabs()) {
-                    @Override
-                    protected void onAjaxUpdate(AjaxRequestTarget target) {
-                        super.onAjaxUpdate(target);
-                        ModalHandler.resizeCurrent(target);
-                        ModalHandler.centerCurrent(target);
-                    }
-                };
-        repoConfigTabbedPanel.setOutputMarkupId(true);
-        repoConfigBorder.add(repoConfigTabbedPanel);
+        repoConfigBorder.add(new RepoTabbedPanel("repoConfigTabbedPanel", getConfigurationTabs()));
 
         form.add(repoConfigBorder);
 
@@ -121,6 +111,8 @@ public abstract class RepoConfigCreateUpdatePanel<E extends RepoDescriptor> exte
         form.add(new DefaultButtonBehavior(test));
 
         add(form);
+
+        bindHeightTo("modalScroll");
     }
 
     protected abstract List<ITab> getConfigurationTabs();
@@ -161,6 +153,7 @@ public abstract class RepoConfigCreateUpdatePanel<E extends RepoDescriptor> exte
                     getPage().info("Repository '" + repoDescriptor.getKey() + "' successfully updated.");
                 }
 
+                cachingDescriptorHelper.reset();
                 ((RepositoryConfigPage) getPage()).refresh(target);
                 AjaxUtils.refreshFeedback(target);
                 close(target);
@@ -191,5 +184,8 @@ public abstract class RepoConfigCreateUpdatePanel<E extends RepoDescriptor> exte
             // if not create, reload the repo from the latest config to handle cancel actions
             getCachingDescriptorHelper().reloadRepository(getRepoDescriptor().getKey());
         }
+        // reset caching descriptor caches
+        cachingDescriptorHelper.reset();
     }
+
 }

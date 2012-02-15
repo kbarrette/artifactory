@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -26,7 +26,7 @@ import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.IAjaxCallDecorator;
 import org.apache.wicket.ajax.form.AjaxFormComponentUpdatingBehavior;
 import org.apache.wicket.authorization.UnauthorizedInstantiationException;
-import org.apache.wicket.behavior.IBehavior;
+import org.apache.wicket.behavior.Behavior;
 import org.apache.wicket.markup.html.WebMarkupContainer;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.DropDownChoice;
@@ -44,10 +44,8 @@ import org.artifactory.api.artifact.UnitInfo;
 import org.artifactory.api.maven.MavenArtifactInfo;
 import org.artifactory.api.module.ModuleInfo;
 import org.artifactory.api.repo.DeployService;
-import org.artifactory.api.repo.RepoPathImpl;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.repo.exception.RepoRejectException;
-import org.artifactory.api.repo.exception.RepositoryRuntimeException;
 import org.artifactory.api.repo.exception.maven.BadPomException;
 import org.artifactory.common.wicket.ajax.NoAjaxIndicatorDecorator;
 import org.artifactory.common.wicket.behavior.collapsible.CollapsibleBehavior;
@@ -58,11 +56,14 @@ import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.component.panel.titled.TitledActionPanel;
 import org.artifactory.common.wicket.panel.editor.TextEditorPanel;
 import org.artifactory.common.wicket.util.AjaxUtils;
+import org.artifactory.common.wicket.util.ComponentPersister;
 import org.artifactory.common.wicket.util.CookieUtils;
 import org.artifactory.descriptor.repo.LocalRepoAlphaComparator;
 import org.artifactory.descriptor.repo.LocalRepoDescriptor;
 import org.artifactory.log.LoggerFactory;
 import org.artifactory.maven.MavenModelUtils;
+import org.artifactory.repo.InternalRepoPathFactory;
+import org.artifactory.sapi.common.RepositoryRuntimeException;
 import org.artifactory.util.ExceptionUtils;
 import org.artifactory.util.FileUtils;
 import org.artifactory.util.PathUtils;
@@ -80,6 +81,8 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+
+import static org.artifactory.common.wicket.util.ComponentPersister.setPersistent;
 
 /**
  * @author Yoav Aharoni
@@ -113,7 +116,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
             model.repos = getRepos();
             model.targetRepo = getPersistentTargetRepo();
 
-            setDefaultModel(new CompoundPropertyModel(model));
+            setDefaultModel(new CompoundPropertyModel<DeployModel>(model));
 
             add(new Label("file.name"));
             addPathField();
@@ -215,7 +218,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
             return artifactInfoContainer;
         }
 
-        private Component newGavcField(String id, boolean required, IBehavior behavior) {
+        private Component newGavcField(String id, boolean required, Behavior behavior) {
             FormComponent textField = new TextField(id);
             textField.setRequired(required);
             textField.setOutputMarkupId(true);
@@ -239,7 +242,8 @@ public class DeployArtifactPanel extends TitledActionPanel {
         }
 
         private void addDeployMavenCheckbox() {
-            Component autoCalculatePath = new StyledCheckbox("isMavenArtifact").setPersistent(true);
+            StyledCheckbox autoCalculatePath = new StyledCheckbox("isMavenArtifact");
+            setPersistent(autoCalculatePath);
             autoCalculatePath.add(new OnDeployTypeChangeBehavior());
             add(autoCalculatePath);
             add(new HelpBubble("isMavenArtifact.help", new ResourceModel("isMavenArtifact.help")));
@@ -247,7 +251,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
 
         private void addTargetRepoDropDown() {
             FormComponent targetRepo = new DropDownChoice<LocalRepoDescriptor>(TARGET_REPO, model.repos);
-            targetRepo.setPersistent(true);
+            setPersistent(targetRepo);
             targetRepo.setRequired(true);
             add(targetRepo);
 
@@ -291,7 +295,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
                         MavenModelUtils.mavenModelToArtifactInfo(MavenModelUtils.toMavenModel(model.mavenArtifactInfo))
                                 .getPath();
                 String pomPath = PathUtils.stripExtension(path) + ".pom";
-                return repoService.exists(new RepoPathImpl(repo.getKey(), pomPath));
+                return repoService.exists(InternalRepoPathFactory.create(repo.getKey(), pomPath));
             } catch (RepositoryRuntimeException e) {
                 cleanupResources();
                 throw e;
@@ -339,9 +343,9 @@ public class DeployArtifactPanel extends TitledActionPanel {
                     }
                     model.pomXml = MavenModelUtils.mavenModelToString(mavenModel);
                 }
-                target.addComponent(getPomEditorContainer().get("deployPom"));
-                target.addComponent(getPomEditorContainer());
-                target.addComponent(get("targetPath"));
+                target.add(getPomEditorContainer().get("deployPom"));
+                target.add(getPomEditorContainer());
+                target.add(get("targetPath"));
                 AjaxUtils.refreshFeedback();
             }
         }
@@ -362,8 +366,8 @@ public class DeployArtifactPanel extends TitledActionPanel {
                 if (!isMavenArtifact) {
                     model.deployPom = false;
                 }
-                target.addComponent(get("artifactInfo"));
-                target.addComponent(get("targetPath"));
+                target.add(get("artifactInfo"));
+                target.add(get("targetPath"));
             }
         }
 
@@ -393,11 +397,11 @@ public class DeployArtifactPanel extends TitledActionPanel {
                     AjaxUtils.refreshFeedback();
                 }
                 model.deployPom = isPomArtifact() || !isPomExists(getPersistentTargetRepo());
-                target.addComponent(get("artifactInfo:artifactInfo.groupId"));
-                target.addComponent(get("artifactInfo:artifactInfo.artifactId"));
-                target.addComponent(get("artifactInfo:artifactInfo.version"));
-                target.addComponent(get("targetPath"));
-                target.addComponent(getPomEditorContainer());
+                target.add(get("artifactInfo:artifactInfo.groupId"));
+                target.add(get("artifactInfo:artifactInfo.artifactId"));
+                target.add(get("artifactInfo:artifactInfo.version"));
+                target.add(get("targetPath"));
+                target.add(getPomEditorContainer());
                 AjaxUtils.refreshFeedback();
             }
         }
@@ -415,7 +419,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
                         model.pomXml = deployService.getPomModelString(model.file);
                     }
                 }
-                target.addComponent(getPomEditorContainer());
+                target.add(getPomEditorContainer());
             }
         }
 
@@ -436,7 +440,13 @@ public class DeployArtifactPanel extends TitledActionPanel {
             cleanupResources();
             Component uploadPanel = new UploadArtifactPanel();
             DeployArtifactPanel.this.replaceWith(uploadPanel);
-            target.addComponent(uploadPanel);
+            target.add(uploadPanel);
+        }
+
+        @Override
+        protected void onBeforeRender() {
+            super.onBeforeRender();
+            ComponentPersister.loadChildren(this);
         }
 
         private class DeployLink extends TitledAjaxSubmitLink {
@@ -447,6 +457,8 @@ public class DeployArtifactPanel extends TitledActionPanel {
 
             @Override
             protected void onSubmit(AjaxRequestTarget target, Form form) {
+                ComponentPersister.saveChildren(this);
+
                 try {
                     //Make sure not to override a good pom.
                     boolean deployPom = model.deployPom && model.isMavenArtifact;
@@ -507,7 +519,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
 
             private void deployFileAndPom() throws IOException, RepoRejectException {
                 ModuleInfo moduleInfo = repoService.getItemModuleInfo(
-                        new RepoPathImpl(model.targetRepo.getKey(), model.getTargetPathFieldValue()));
+                        InternalRepoPathFactory.create(model.targetRepo.getKey(), model.getTargetPathFieldValue()));
                 deployService.validatePom(model.pomXml, model.getTargetPathFieldValue(),
                         moduleInfo, model.targetRepo.isSuppressPomConsistencyChecks());
                 deployService.deploy(model.targetRepo, model.getArtifactInfo(), model.file, model.pomXml, true, false);
@@ -523,6 +535,7 @@ public class DeployArtifactPanel extends TitledActionPanel {
                 super(id, "Cancel");
             }
 
+            @Override
             public void onClick(AjaxRequestTarget target) {
                 finish(target);
             }

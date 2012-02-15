@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -28,7 +28,6 @@ import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.addon.AddonsManager;
 import org.artifactory.addon.wicket.WebstartWebAddon;
 import org.artifactory.api.config.CentralConfigService;
-import org.artifactory.api.repo.RepoPathImpl;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.common.StatusHolder;
 import org.artifactory.common.wicket.behavior.CssClass;
@@ -40,6 +39,7 @@ import org.artifactory.common.wicket.util.AjaxUtils;
 import org.artifactory.descriptor.repo.PomCleanupPolicy;
 import org.artifactory.descriptor.repo.RepoLayout;
 import org.artifactory.descriptor.repo.VirtualRepoDescriptor;
+import org.artifactory.repo.InternalRepoPathFactory;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.webapp.wicket.page.config.SchemaHelpBubble;
 
@@ -104,7 +104,7 @@ public class VirtualRepoAdvancedPanel extends Panel {
                     @Override
                     protected void onSubmit(AjaxRequestTarget target, Form form) {
                         String repoKey = repoDescriptor.getKey();
-                        RepoPath repoPath = RepoPathImpl.repoRootPath(repoKey);
+                        RepoPath repoPath = InternalRepoPathFactory.repoRootPath(repoKey);
                         StatusHolder statusHolder;
                         statusHolder = repositoryService.undeploy(repoPath, false);
                         if (!statusHolder.isError()) {

@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -24,6 +24,7 @@ import org.apache.wicket.markup.html.form.ChoiceRenderer;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.TextField;
 import org.apache.wicket.markup.html.panel.Panel;
+import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.checkbox.styled.StyledCheckbox;
 import org.artifactory.descriptor.repo.ChecksumPolicyType;
 import org.artifactory.descriptor.repo.HttpRepoDescriptor;
@@ -40,6 +41,7 @@ public class HttpRepoBasicPanel extends Panel {
 
     public HttpRepoBasicPanel(String id, final HttpRepoDescriptor repoDescriptor) {
         super(id);
+        add(new CssClass("advanced-remote-repo"));
 
         HttpRepoGeneralSettingsPanel generalSettings = new HttpRepoGeneralSettingsPanel("generalSettings");
         add(generalSettings);
@@ -77,7 +79,7 @@ public class HttpRepoBasicPanel extends Panel {
                 if (!repoDescriptor.isHandleSnapshots()) {
                     maxUniqueSnapshots.setModelObject(0);
                 }
-                target.addComponent(maxUniqueSnapshots);
+                target.add(maxUniqueSnapshots);
             }
         });
         add(handleSnapshots);

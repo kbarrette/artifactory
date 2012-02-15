@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -18,7 +18,7 @@
 
 package org.artifactory.webapp.wicket.page.security.acl;
 
-import org.artifactory.api.security.PermissionTargetInfo;
+import org.artifactory.security.PermissionTargetInfo;
 
 /**
  * @author Yoav Landman

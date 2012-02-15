@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -28,11 +28,12 @@ import org.artifactory.common.wicket.component.modal.panel.BaseModalPanel;
 import org.artifactory.common.wicket.contributor.ResourcePackage;
 import org.artifactory.common.wicket.model.TitleModel;
 
+import static java.lang.String.format;
+
 /**
  * @author Yoav Aharoni
  */
 public class ModalHandler extends ModalWindow implements TitleModel {
-    public static final String CONTENT_ID = "content";
     private BaseModalPanel modalPanel;
 
     private final WebMarkupContainer EMPTY_CONTENT = new WebMarkupContainer(CONTENT_ID);
@@ -48,6 +49,7 @@ public class ModalHandler extends ModalWindow implements TitleModel {
 
         add(ResourcePackage.forJavaScript(ModalHandler.class));
         setCloseButtonCallback(new CloseButtonCallback() {
+            @Override
             public boolean onCloseButtonClicked(AjaxRequestTarget target) {
                 ModalHandler.this.onCloseButtonClicked(target);
                 return true;
@@ -55,6 +57,7 @@ public class ModalHandler extends ModalWindow implements TitleModel {
         });
 
         setWindowClosedCallback(new WindowClosedCallback() {
+            @Override
             public void onClose(AjaxRequestTarget target) {
                 ModalHandler.this.onClose(target);
                 modalPanel = null;
@@ -100,15 +103,15 @@ public class ModalHandler extends ModalWindow implements TitleModel {
         if (modalPanel != null) {
             modalPanel.onClose(target);
         }
-        target.appendJavascript("ModalHandler.onClose();");
+        target.appendJavaScript("ModalHandler.onClose();");
         setContent(EMPTY_CONTENT);
     }
 
     @Override
     public void show(AjaxRequestTarget target) {
         super.show(target);
-        // move modal panel into mainForm, so it would be submited
-        target.appendJavascript("ModalHandler.onPopup();");
+        // move modal panel into mainForm, so it would be submitted
+        target.appendJavaScript("ModalHandler.onPopup();");
 
         // call event listener
         BaseModalPanel modalPanel = getModalPanel();
@@ -137,6 +140,7 @@ public class ModalHandler extends ModalWindow implements TitleModel {
 
         // setPageCreator() will reset getModalPanel()
         setPageCreator(new PageCreator() {
+            @Override
             public Page createPage() {
                 return new ModalShowPage(panel);
             }
@@ -144,16 +148,21 @@ public class ModalHandler extends ModalWindow implements TitleModel {
         show(target);
     }
 
-    public static void resizeAndCenterCurrent(AjaxRequestTarget target) {
-        resizeCurrent(target);
-        centerCurrent(target);
+    public static void resizeAndCenterCurrent() {
+        resizeCurrent();
+        centerCurrent();
     }
 
-    public static void resizeCurrent(AjaxRequestTarget target) {
-        target.appendJavascript("ModalHandler.resizeCurrent();");
+    public static void resizeCurrent() {
+        AjaxRequestTarget.get().appendJavaScript("ModalHandler.resizeCurrent();");
     }
 
-    public static void centerCurrent(AjaxRequestTarget target) {
-        target.appendJavascript("ModalHandler.centerCurrent();");
+    public static void centerCurrent() {
+        AjaxRequestTarget.get().appendJavaScript("ModalHandler.centerCurrent();");
+    }
+
+    public static void bindHeightTo(String markupId) {
+        AjaxRequestTarget.get().appendJavaScript(format("ModalHandler.bindModalHeight(dojo.byId('%s'));", markupId));
+        ModalHandler.resizeAndCenterCurrent();
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -24,15 +24,15 @@ import org.apache.wicket.extensions.markup.html.tabs.ITab;
 import org.apache.wicket.markup.html.panel.Panel;
 import org.apache.wicket.model.Model;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.api.tree.fs.ZipEntryInfo;
-import org.artifactory.api.tree.fs.ZipTreeNode;
+import org.artifactory.fs.ZipEntryInfo;
 import org.artifactory.repo.RepoPath;
+import org.artifactory.util.TreeNode;
 import org.artifactory.webapp.actionable.ActionableItem;
 import org.artifactory.webapp.wicket.page.browse.treebrowser.tabs.zipentry.ZipEntryPanel;
 import org.artifactory.webapp.wicket.util.ItemCssClass;
 
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Represents a file or directory inside a zip.
@@ -44,21 +44,22 @@ public class ArchivedFolderActionableItem extends ArchivedItemActionableItem imp
     private String displayName;
     private boolean compacted;
 
-    public ArchivedFolderActionableItem(RepoPath archivePath, ZipTreeNode node, boolean compact) {
+    public ArchivedFolderActionableItem(RepoPath archivePath, TreeNode<ZipEntryInfo> node, boolean compact) {
         super(archivePath, node);
-        this.displayName = node.getName();
+        this.displayName = node.getData().getName();
         this.compactAllowed = compact;
         if (compact) {
             compact();
         }
     }
 
+    @Override
     public String getDisplayName() {
         return displayName;
     }
 
     public ZipEntryInfo getZipEntry() {
-        return node.getZipEntry();
+        return node.getData();
     }
 
     @Override
@@ -71,15 +72,17 @@ public class ArchivedFolderActionableItem extends ArchivedItemActionableItem imp
         });
     }
 
+    @Override
     public void filterActions(AuthorizationService authService) {
 
     }
 
+    @Override
     public List<ActionableItem> getChildren(AuthorizationService authService) {
         List<ActionableItem> items = Lists.newArrayList();
-        Set<ZipTreeNode> children = node.getChildren();
-        for (ZipTreeNode file : children) {
-            if (file.isDirectory()) {
+        Collection<? extends TreeNode<ZipEntryInfo>> children = node.getChildren();
+        for (TreeNode<ZipEntryInfo> file : children) {
+            if (file.getData().isDirectory()) {
                 items.add(new ArchivedFolderActionableItem(getArchiveRepoPath(), file, compactAllowed));
             } else {
                 items.add(new ArchivedFileActionableItem(getArchiveRepoPath(), file));
@@ -88,32 +91,35 @@ public class ArchivedFolderActionableItem extends ArchivedItemActionableItem imp
         return items;
     }
 
+    @Override
     public boolean hasChildren(AuthorizationService authService) {
         return node.hasChildren();
     }
 
+    @Override
     public boolean isCompactAllowed() {
         return compactAllowed;
     }
 
+    @Override
     public void setCompactAllowed(boolean compactAllowed) {
         this.compactAllowed = compactAllowed;
     }
 
     private void compact() {
         StringBuilder compactedName = new StringBuilder(displayName);
-        ZipTreeNode next = getNextCompactedNode(node);
+        TreeNode<ZipEntryInfo> next = getNextCompactedNode(node);
         while (next != null) {
             compacted = true;
             node = next;
-            compactedName.append('/').append(next.getName());
+            compactedName.append('/').append(next.getData().getName());
             next = getNextCompactedNode(next);
         }
         displayName = compactedName.toString();
     }
 
-    private ZipTreeNode getNextCompactedNode(ZipTreeNode next) {
-        Set<ZipTreeNode> children = next.getChildren();
+    private TreeNode<ZipEntryInfo> getNextCompactedNode(TreeNode<ZipEntryInfo> next) {
+        Collection<? extends TreeNode<ZipEntryInfo>> children = next.getChildren();
 
         // only compact folders with exactly one child
         if (children == null || children.size() != 1) {
@@ -121,14 +127,15 @@ public class ArchivedFolderActionableItem extends ArchivedItemActionableItem imp
         }
 
         // the only child must be a folder
-        ZipTreeNode firstChild = children.iterator().next();
-        if (!firstChild.isDirectory()) {
+        TreeNode<ZipEntryInfo> firstChild = children.iterator().next();
+        if (!firstChild.getData().isDirectory()) {
             return null;
         }
 
         return firstChild;
     }
 
+    @Override
     public String getCssClass() {
         return compacted ? ItemCssClass.folderCompact.getCssClass() : ItemCssClass.folder.getCssClass();
     }

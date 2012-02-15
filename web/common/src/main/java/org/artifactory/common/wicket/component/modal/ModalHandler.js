@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -17,10 +17,10 @@
  */
 
 var ModalHandler = {
-    onPopup: function() {
+    onPopup:function () {
         ModalHandler.resizeCurrent();
         if (dojo.isIE <= 7) {
-            setTimeout(function() {
+            setTimeout(function () {
                 ModalHandler.resizeCurrent();
             }, 200);
         }
@@ -38,7 +38,7 @@ var ModalHandler = {
         }
     },
 
-    onkeyup: function (e) {
+    onkeyup:function (e) {
         var event = e ? e : window.event;
         var modal = Wicket.Window.current;
         if (event.keyCode == 27 && modal && !modal.closing) {
@@ -46,13 +46,13 @@ var ModalHandler = {
         }
     },
 
-    onError: function() {
+    onError:function () {
         var modal = Wicket.Window.current;
         if (!modal.wasResized) {
             window.setTimeout(ModalHandler.resizeCurrent, 100);
         }
     },
-    onClose: function() {
+    onClose:function () {
         // disconnect from onkeyup
         if (!Wicket.Window.current) {
             dojo.disconnect(ModalHandler.connection);
@@ -60,7 +60,7 @@ var ModalHandler = {
         }
     },
 
-    bindModalHeight: function(node) {
+    bindModalHeight:function (node) {
         var modal = Wicket.Window.current;
         if (!modal) {
             return;
@@ -68,23 +68,23 @@ var ModalHandler = {
 
         ModalHandler.autoHeight(node);
         if (dojo.isIE <= 7) {
-            setTimeout(function() {
+            setTimeout(function () {
                 ModalHandler.autoHeight(node)
             }, 100);
         }
-        modal.resizing = function() {
+        modal.onresize = function () {
             ModalHandler.autoHeight(node);
         };
     },
 
-    autoHeight: function(node) {
+    autoHeight:function (node) {
         var modal = Wicket.Window.current;
         if (!modal) {
             return;
         }
 
         var content = modal.content;
-        var height = node.clientHeight + content.offsetHeight - content.firstChild.offsetHeight - 5;
+        var height = node.clientHeight + content.offsetHeight - content.firstChild.offsetHeight - 6;
 
         if (height > 0) {
             node.style.height = height + 'px';
@@ -95,13 +95,13 @@ var ModalHandler = {
         }
     },
 
-    centerCurrent: function() {
+    centerCurrent:function () {
         if (Wicket.Window.current) {
             Wicket.Window.current.center();
         }
     },
 
-    resizeCurrent: function() {
+    resizeCurrent:function () {
         var modal = Wicket.Window.current;
         if (!modal) {
             return;
@@ -120,33 +120,35 @@ var ModalHandler = {
         var maxWidth = Wicket.Window.getViewportWidth();
         var maxHeight = Wicket.Window.getViewportHeight() - 70;
 
-        if (width > maxWidth) {
-            width = maxWidth;
-        }
-        if (height > maxHeight) {
-            height = maxHeight;
-        }
+        width = Math.min(width, maxWidth);
+        height = Math.min(height, maxHeight);
 
         modal.window.style.width = width + modal.settings.widthUnit;
         modal.content.style.height = height + modal.settings.heightUnit;
+        modal.onresize();
     },
 
-    resizeAndCenter:function() {
+    resizeAndCenter:function () {
         ModalHandler.resizeCurrent();
         ModalHandler.centerCurrent();
     }
 };
 
+Wicket.Window.prototype.onresize = function () {
+};
 
-Wicket.Window.prototype.resizing = function() {
-    Wicket.Window.current.wasResized = true;
+Wicket.Window.prototype.resizing = function () {
+    var modal = Wicket.Window.current;
+    modal.wasResized = true;
+    modal.onresize();
 };
 
 /**
  * Returns the modal window markup with specified element identifiers.
  */
 Wicket.Window.getMarkup =
-        function(idWindow, idClassElement, idCaption, idContent, idTop, idTopLeft, idTopRight, idLeft, idRight, idBottomLeft, idBottomRight, idBottom, idCaptionText, isFrame) {
+        function (idWindow, idClassElement, idCaption, idContent, idTop, idTopLeft, idTopRight, idLeft, idRight,
+                idBottomLeft, idBottomRight, idBottom, idCaptionText, isFrame) {
             var s =
                     "<div class=\"wicket-modal\" id=\"" + idWindow +
                             "\" style=\"top: 10px; left: 10px; width: 100px;\">" +
@@ -225,7 +227,7 @@ Wicket.Window.getMarkup =
 Wicket.Window.unloadConfirmation = false
 
 Wicket.Window.prototype.superClose = Wicket.Window.prototype.close;
-Wicket.Window.prototype.checkedClose = function() {
+Wicket.Window.prototype.checkedClose = function () {
     if (this.closing) {
         this.closing = false;
         this.superClose(true);
@@ -233,15 +235,15 @@ Wicket.Window.prototype.checkedClose = function() {
     }
 };
 
-Wicket.Window.prototype.close = function() {
+Wicket.Window.prototype.close = function () {
     var me = this;
     me.checkedClose();
     me.closing = true;
 
     dojo.fadeOut({
-        node: me.window,
-        duration: 220,
-        onEnd: function() {
+        node:me.window,
+        duration:220,
+        onEnd:function () {
             me.checkedClose();
         }
     }).play();

@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -20,6 +20,7 @@ package org.artifactory.webapp.wicket.page.build.actionable;
 
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.repo.RepoPath;
+import org.artifactory.util.CollectionUtils;
 import org.artifactory.webapp.actionable.RepoAwareActionableItemBase;
 import org.artifactory.webapp.actionable.action.DownloadAction;
 import org.artifactory.webapp.actionable.action.ShowInTreeAction;
@@ -48,6 +49,7 @@ public class ModuleDependencyActionableItem extends RepoAwareActionableItemBase 
         this.dependency = dependency;
     }
 
+    @Override
     public String getDisplayName() {
         return dependency.getId();
     }
@@ -56,10 +58,12 @@ public class ModuleDependencyActionableItem extends RepoAwareActionableItemBase 
         return dependency;
     }
 
+    @Override
     public String getCssClass() {
         return ItemCssClass.doc.getCssClass();
     }
 
+    @Override
     public void filterActions(AuthorizationService authService) {
         ShowInTreeAction showInTreeAction = new ShowInTreeAction();
         DownloadAction downloadAction = new DownloadAction();
@@ -79,7 +83,7 @@ public class ModuleDependencyActionableItem extends RepoAwareActionableItemBase 
      */
     public String getDependencyScope() {
         List<String> scopes = dependency.getScopes();
-        if ((scopes == null) || scopes.isEmpty()) {
+        if (CollectionUtils.isNullOrEmpty(scopes)) {
             return "";
         }
 

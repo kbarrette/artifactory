@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -24,7 +24,6 @@ import com.google.common.collect.Multimap;
 import org.apache.commons.lang.StringUtils;
 import org.apache.wicket.Component;
 import org.apache.wicket.MarkupContainer;
-import org.apache.wicket.PageParameters;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.ajax.IAjaxCallDecorator;
 import org.apache.wicket.extensions.markup.html.basic.SmartLinkLabel;
@@ -42,15 +41,12 @@ import org.apache.wicket.markup.repeater.Item;
 import org.apache.wicket.markup.repeater.OddEvenItem;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
+import org.apache.wicket.request.mapper.parameter.PageParameters;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.repo.RepositoryService;
-import org.artifactory.api.security.AclInfo;
 import org.artifactory.api.security.AclService;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.api.security.GroupInfo;
-import org.artifactory.api.security.PermissionTargetInfo;
 import org.artifactory.api.security.UserGroupService;
-import org.artifactory.api.security.UserInfo;
 import org.artifactory.common.wicket.ajax.NoAjaxIndicatorDecorator;
 import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.behavior.defaultbutton.DefaultButtonBehavior;
@@ -65,8 +61,14 @@ import org.artifactory.common.wicket.component.table.SortableTable;
 import org.artifactory.common.wicket.component.table.columns.checkbox.AjaxCheckboxColumn;
 import org.artifactory.common.wicket.util.AjaxUtils;
 import org.artifactory.descriptor.repo.LocalRepoDescriptor;
+import org.artifactory.factory.InfoFactoryHolder;
 import org.artifactory.log.LoggerFactory;
 import org.artifactory.security.AccessLogger;
+import org.artifactory.security.GroupInfo;
+import org.artifactory.security.MutableAclInfo;
+import org.artifactory.security.MutablePermissionTargetInfo;
+import org.artifactory.security.PermissionTargetInfo;
+import org.artifactory.security.UserInfo;
 import org.artifactory.util.AlreadyExistsException;
 import org.artifactory.webapp.wicket.page.config.security.general.SecurityGeneralConfigPage;
 import org.artifactory.webapp.wicket.page.security.acl.tabs.PermissionPanel;
@@ -85,19 +87,12 @@ import java.util.List;
  * @author Yoav Landman
  * @author Yoav Aharoni
  */
-public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<PermissionTargetInfo> {
+public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<MutablePermissionTargetInfo> {
     private static final Logger log = LoggerFactory.getLogger(PermissionTargetCreateUpdatePanel.class);
 
     @SpringBean
     private UserGroupService userGroupService;
 
-    @Override
-    public void onShow(AjaxRequestTarget target) {
-        super.onShow(target);
-        target.appendJavascript("PermissionTabPanel.onShow()");
-    }
-
-    private PermissionTargetInfo permissionTarget;
     @SpringBean
     private RepositoryService repositoryService;
 
@@ -107,13 +102,13 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
     @SpringBean
     private AuthorizationService authService;
 
+    private PermissionTargetInfo permissionTarget;
     private RepoKeysData repoKeysData;
-
-    private AclInfo aclInfo;
+    private MutableAclInfo aclInfo;
     private PermissionTargetAceInfoRowDataProvider groupsDataProvider;
     private PermissionTargetAceInfoRowDataProvider usersDataProvider;
 
-    public PermissionTargetCreateUpdatePanel(CreateUpdateAction action, PermissionTargetInfo target,
+    public PermissionTargetCreateUpdatePanel(CreateUpdateAction action, MutablePermissionTargetInfo target,
             final Component targetsTable) {
         super(action, target);
         add(new CssClass("permissions-panel"));
@@ -131,10 +126,9 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
         permissionTarget = target;
 
         if (isCreate()) {
-            aclInfo = new AclInfo();
-            aclInfo.setPermissionTarget(permissionTarget);
+            aclInfo = InfoFactoryHolder.get().createAcl(permissionTarget);
         } else {
-            aclInfo = aclService.getAcl(permissionTarget);
+            aclInfo = InfoFactoryHolder.get().copyAcl(aclService.getAcl(permissionTarget));
         }
 
         groupsDataProvider = new PermissionTargetAceInfoRowDataProvider(userGroupService, aclInfo) {
@@ -157,8 +151,15 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
         addSubmitButton(targetsTable);
     }
 
+    @Override
+    public void onShow(AjaxRequestTarget target) {
+        super.onShow(target);
+        target.appendJavaScript("PermissionTabPanel.onShow()");
+    }
+
     private void addPermissionTargetNameField(TitledBorder border) {
         TextField nameTf = new TextField("name");
+        setDefaultFocusField(nameTf);
         border.add(nameTf);
         if (!isSystemAdmin() || !isCreate()) {
             nameTf.setEnabled(false);
@@ -179,6 +180,7 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
 
     private void addCancelButton() {
         TitledAjaxLink cancel = new TitledAjaxLink("cancel", "Cancel") {
+            @Override
             public void onClick(AjaxRequestTarget target) {
                 cancel();
                 ModalHandler.closeCurrent(target);
@@ -202,9 +204,10 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
                 repoKeysData.setAnyRepository(anySelected);
 
                 entity.setRepoKeys(repoKeysData.getSelectedKeysList());
+                aclInfo.setPermissionTarget(entity);
                 if (isCreate()) {
                     try {
-                        aclService.createAcl(getAclInfo());
+                        aclService.createAcl(aclInfo);
                         AccessLogger.created("Permission target " + name + " was created successfully");
                     } catch (Exception e) {
                         String msg;
@@ -222,12 +225,12 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
                     getPage().info("Permission target '" + name + "' created successfully.");
                 } else {
                     try {
-                        getAclInfo().setPermissionTarget(entity);
-                        save();
+                        aclService.updateAcl(aclInfo);
+                        reloadData();
                         String message = "Permission target '" + name + "' updated successfully.";
                         AccessLogger.updated(message);
                         getPage().info(message);
-                        target.addComponent(PermissionTargetCreateUpdatePanel.this);
+                        target.add(PermissionTargetCreateUpdatePanel.this);
                     } catch (Exception e) {
                         String msg = "Failed to update permissions target: " + e.getMessage();
                         log.error(msg, e);
@@ -238,7 +241,7 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
                 }
                 //Close the modal window and re-render the table
                 targetsTable.modelChanged();
-                target.addComponent(targetsTable);
+                target.add(targetsTable);
                 AjaxUtils.refreshFeedback(target);
                 ModalHandler.closeCurrent(target);
             }
@@ -305,7 +308,7 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
                 //If the item is an anonymous user and the access is disabled, warn
                 String username = model.getObject().getPrincipal();
                 if (UserInfo.ANONYMOUS.equals(username) && !authService.isAnonAccessEnabled()) {
-                    CharSequence pageUrl = urlFor(SecurityGeneralConfigPage.class, PageParameters.NULL);
+                    CharSequence pageUrl = urlFor(SecurityGeneralConfigPage.class, new PageParameters());
 
                     StringBuilder usernameLabelBuilder = new StringBuilder(username).append(" (");
                     if (authService.isAdmin()) {
@@ -410,14 +413,9 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
         target.addChildren(row, StyledCheckbox.class);
     }
 
-    public void save() {
-        aclService.updateAcl(aclInfo);
-        reloadData();
-    }
-
     private void reloadData() {
         //Reload from backend
-        aclInfo = aclService.getAcl(permissionTarget);
+        aclInfo = InfoFactoryHolder.get().copyAcl(aclService.getAcl(permissionTarget));
         groupsDataProvider.setAclInfo(aclInfo);
         groupsDataProvider.loadData();
 
@@ -431,7 +429,7 @@ public class PermissionTargetCreateUpdatePanel extends CreateUpdatePanel<Permiss
         }
     }
 
-    public AclInfo getAclInfo() {
+    public MutableAclInfo getAclInfo() {
         return aclInfo;
     }
 

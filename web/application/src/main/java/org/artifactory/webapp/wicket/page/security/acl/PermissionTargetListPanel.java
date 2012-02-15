@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -19,18 +19,20 @@
 package org.artifactory.webapp.wicket.page.security.acl;
 
 import org.apache.wicket.ajax.AjaxRequestTarget;
+import org.apache.wicket.extensions.markup.html.repeater.data.sort.SortOrder;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.IColumn;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.PropertyColumn;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.security.AclService;
-import org.artifactory.api.security.ArtifactoryPermission;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.api.security.PermissionTargetInfo;
 import org.artifactory.common.wicket.component.CreateUpdateAction;
 import org.artifactory.common.wicket.component.modal.panel.BaseModalPanel;
 import org.artifactory.common.wicket.component.panel.list.ModalListPanel;
+import org.artifactory.factory.InfoFactoryHolder;
 import org.artifactory.security.AccessLogger;
+import org.artifactory.security.ArtifactoryPermission;
+import org.artifactory.security.PermissionTargetInfo;
 
 import java.util.List;
 
@@ -51,7 +53,7 @@ public class PermissionTargetListPanel extends ModalListPanel<PermissionTargetIn
             disableNewItemLink();
         }
 
-        getDataProvider().setSort("name", true);
+        getDataProvider().setSort("name", SortOrder.ASCENDING);
     }
 
     @Override
@@ -76,14 +78,14 @@ public class PermissionTargetListPanel extends ModalListPanel<PermissionTargetIn
     protected BaseModalPanel newCreateItemPanel() {
         return new PermissionTargetCreateUpdatePanel(
                 CreateUpdateAction.CREATE,
-                new PermissionTargetInfo(), this);
+                InfoFactoryHolder.get().createPermissionTarget(), this);
     }
 
     @Override
     protected BaseModalPanel newUpdateItemPanel(PermissionTargetInfo permissionTarget) {
         return new PermissionTargetCreateUpdatePanel(
                 CreateUpdateAction.UPDATE,
-                permissionTarget, this);
+                InfoFactoryHolder.get().copyPermissionTarget(permissionTarget), this);
     }
 
     @Override

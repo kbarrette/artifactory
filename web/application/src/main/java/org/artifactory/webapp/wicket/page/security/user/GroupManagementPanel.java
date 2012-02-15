@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -23,13 +23,14 @@ import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
-import org.artifactory.api.security.GroupInfo;
+import org.artifactory.api.security.GroupNotFoundException;
 import org.artifactory.api.security.UserGroupService;
 import org.artifactory.common.wicket.WicketProperty;
 import org.artifactory.common.wicket.behavior.filteringselect.FilteringSelectBehavior;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.component.panel.fieldset.FieldSetPanel;
 import org.artifactory.common.wicket.util.AjaxUtils;
+import org.artifactory.security.GroupInfo;
 
 import java.util.List;
 
@@ -44,7 +45,7 @@ public class GroupManagementPanel extends FieldSetPanel {
     private UserGroupService userGroupService;
 
     @WicketProperty
-    private String selectedGroup;
+    private GroupInfo selectedGroup;
 
     public GroupManagementPanel(String id, final UsersPanel usersListPanel) {
         super(id);
@@ -55,12 +56,7 @@ public class GroupManagementPanel extends FieldSetPanel {
         List<GroupInfo> groupInfos = userGroupService.getInternalGroups();
         // Drop-down choice of groups to add/remove users to/from
         DropDownChoice groupDdc = new UsersPanel.TargetGroupDropDownChoice("groupManagement",
-                new PropertyModel(this, "selectedGroup"), groupInfos) {
-            @Override
-            protected CharSequence getDefaultChoice(Object selected) {
-                return "";
-            }
-        };
+                new PropertyModel<GroupInfo>(this, "selectedGroup"), groupInfos);
         groupDdc.add(new FilteringSelectBehavior());
         form.add(groupDdc);
 
@@ -69,11 +65,15 @@ public class GroupManagementPanel extends FieldSetPanel {
             protected void onSubmit(AjaxRequestTarget target, Form form) {
                 List<String> selectedUsernames = usersListPanel.getSelectedUsernames();
                 if (selectedGroup != null && !selectedUsernames.isEmpty()) {
-                    userGroupService.addUsersToGroup(
-                            selectedGroup, selectedUsernames);
-                    info("Successfully added selected users  to group '" + selectedGroup + "'.");
-                    // refresh the users table
-                    usersListPanel.refreshUsersList(target);
+                    try {
+                        userGroupService.addUsersToGroup(
+                                selectedGroup.getGroupName(), selectedUsernames);
+                        info("Successfully added selected users  to group '" + selectedGroup + "'.");
+                        // refresh the users table
+                        usersListPanel.refreshUsersList(target);
+                    } catch (GroupNotFoundException gnfe) {
+                        error("Could not find group '" + selectedGroup + "': " + gnfe.getMessage());
+                    }
                     AjaxUtils.refreshFeedback(target);
                 }
             }
@@ -85,7 +85,7 @@ public class GroupManagementPanel extends FieldSetPanel {
                 List<String> selectedUsernames = usersListPanel.getSelectedUsernames();
                 if (selectedGroup != null && !selectedUsernames.isEmpty()) {
                     userGroupService.removeUsersFromGroup(
-                            selectedGroup, selectedUsernames);
+                            selectedGroup.getGroupName(), selectedUsernames);
                     info("Successfully removed selected users from group '" + selectedGroup + "'.");
                     // refresh the users table
                     usersListPanel.refreshUsersList(target);

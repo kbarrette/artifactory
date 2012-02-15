@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -27,9 +27,9 @@ import org.apache.wicket.markup.repeater.data.DataView;
 import org.apache.wicket.markup.repeater.data.IDataProvider;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
-import org.artifactory.api.security.UserInfo;
 import org.artifactory.common.wicket.component.StringChoiceRenderer;
 import org.artifactory.common.wicket.component.deletable.label.DeletableLabel;
+import org.artifactory.security.UserGroupInfo;
 
 import java.io.Serializable;
 import java.util.Collection;
@@ -73,7 +73,7 @@ public class DeletableLabelGroup<T extends Serializable> extends Panel {
 
     public void onDelete(T value, AjaxRequestTarget target) {
         getData().remove(value);
-        target.addComponent(this);
+        target.add(this);
     }
 
     public IChoiceRenderer<T> getRenderer() {
@@ -115,8 +115,8 @@ public class DeletableLabelGroup<T extends Serializable> extends Panel {
                 onDelete(value, target);
             }
         };
-        if (value instanceof UserInfo.UserGroupInfo) {
-            UserInfo.UserGroupInfo userGroupInfo = (UserInfo.UserGroupInfo) value;
+        if (value instanceof UserGroupInfo) {
+            UserGroupInfo userGroupInfo = (UserGroupInfo) value;
             label.setLabelClickable(!userGroupInfo.isExternal());
             label.setLabelDeletable(!userGroupInfo.isExternal());
         } else {
@@ -136,20 +136,24 @@ public class DeletableLabelGroup<T extends Serializable> extends Panel {
     }
 
     private class LabelsDataProvider implements IDataProvider<T> {
+        @Override
         public Iterator<T> iterator(int first, int count) {
             // no paging anyway...
             return getData().iterator();
         }
 
+        @Override
         public int size() {
             return getData().size();
         }
 
+        @Override
         public IModel<T> model(T object) {
             return new Model<T>(object);
         }
 
 
+        @Override
         public void detach() {
         }
     }

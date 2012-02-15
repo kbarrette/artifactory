@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -19,6 +19,7 @@
 package org.artifactory.webapp.wicket.page.security.group.permission;
 
 import com.google.common.collect.Lists;
+import org.apache.wicket.extensions.markup.html.repeater.data.sort.SortOrder;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.AbstractColumn;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.IColumn;
 import org.apache.wicket.extensions.markup.html.repeater.util.SortableDataProvider;
@@ -29,18 +30,19 @@ import org.apache.wicket.markup.repeater.Item;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.spring.injection.annot.SpringBean;
-import org.artifactory.api.security.AceInfo;
-import org.artifactory.api.security.AclInfo;
 import org.artifactory.api.security.AclService;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.api.security.GroupInfo;
-import org.artifactory.api.security.PermissionTargetInfo;
 import org.artifactory.api.security.UserGroupService;
 import org.artifactory.common.wicket.component.border.titled.TitledBorder;
 import org.artifactory.common.wicket.component.modal.panel.BaseModalPanel;
 import org.artifactory.common.wicket.component.table.SortableTable;
 import org.artifactory.common.wicket.component.table.columns.BooleanColumn;
 import org.artifactory.common.wicket.util.ListPropertySorter;
+import org.artifactory.factory.InfoFactoryHolder;
+import org.artifactory.security.AceInfo;
+import org.artifactory.security.AclInfo;
+import org.artifactory.security.GroupInfo;
+import org.artifactory.security.PermissionTargetInfo;
 import org.artifactory.webapp.wicket.page.security.acl.AclsPage;
 import org.artifactory.webapp.wicket.page.security.acl.PermissionsRow;
 
@@ -80,6 +82,7 @@ public class GroupPermissionsPanel extends BaseModalPanel {
 
         columns.add(new AbstractColumn<PermissionsRow>(
                 Model.of("Permission Target"), "permissionTarget.name") {
+            @Override
             public void populateItem(Item cellItem, String componentId, IModel rowModel) {
                 cellItem.add(new LinkPanel(componentId, rowModel));
             }
@@ -99,21 +102,24 @@ public class GroupPermissionsPanel extends BaseModalPanel {
         private List<PermissionsRow> groupPermissions;
 
         PermissionsTabTableDataProvider(GroupInfo groupInfo) {
-            setSort("permissionTarget.name", true);
+            setSort("permissionTarget.name", SortOrder.ASCENDING);
             this.groupInfo = groupInfo;
             loadData();
         }
 
+        @Override
         public Iterator<PermissionsRow> iterator(int first, int count) {
             ListPropertySorter.sort(groupPermissions, getSort());
             List<PermissionsRow> list = groupPermissions.subList(first, first + count);
             return list.iterator();
         }
 
+        @Override
         public int size() {
             return groupPermissions.size();
         }
 
+        @Override
         public IModel<PermissionsRow> model(PermissionsRow object) {
             return new Model<PermissionsRow>(object);
         }
@@ -168,7 +174,7 @@ public class GroupPermissionsPanel extends BaseModalPanel {
             Link link = new Link("link") {
                 @Override
                 public void onClick() {
-                    setResponsePage(new AclsPage(permissionTarget));
+                    setResponsePage(new AclsPage(InfoFactoryHolder.get().copyPermissionTarget(permissionTarget)));
                 }
             };
             add(link);

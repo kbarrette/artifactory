@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -29,7 +29,9 @@ import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.form.FormComponent;
 import org.apache.wicket.markup.html.form.TextField;
+import org.apache.wicket.markup.repeater.RepeatingView;
 import org.apache.wicket.model.CompoundPropertyModel;
+import org.apache.wicket.model.Model;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.apache.wicket.validation.IValidator;
@@ -60,6 +62,8 @@ import org.artifactory.webapp.wicket.util.validation.JcrNameValidator;
 import org.artifactory.webapp.wicket.util.validation.UniqueXmlIdValidator;
 import org.artifactory.webapp.wicket.util.validation.XsdNCNameValidator;
 
+import java.util.Map;
+
 /**
  * @author Yoav Aharoni
  */
@@ -85,6 +89,8 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
         boolean disableFields = !isCreate() && RepoLayoutUtils.isReservedName(layout.getName());
 
         FormComponent<String> nameTextField = new TextField<String>("name");
+        setDefaultFocusField(nameTextField);
+
         if (isCreate()) {
             nameTextField.add(new JcrNameValidator("Invalid layout name '%s'."));
             nameTextField.add(new XsdNCNameValidator("Invalid layout name '%s'."));
@@ -117,7 +123,7 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
                 boolean enable = entity.isDistinctiveDescriptorPathPattern();
                 descriptorPathPatternTextField.setEnabled(enable);
                 descriptorPathPatternTextField.setRequired(enable);
-                target.addComponent(descriptorPathPatternTextField);
+                target.add(descriptorPathPatternTextField);
             }
 
             @Override
@@ -132,6 +138,8 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
         addLayoutField("fileIntegrationRevisionRegExp", layoutFields, true, disableFields);
 
         addTestBorder();
+
+        addRegExBorder();
 
         // add the panel display which shows the association of the layout with the repositories.
         if (isCreate()) {
@@ -150,6 +158,8 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
         submit.setEnabled(!disableFields);
         form.add(submit);
         form.add(new DefaultButtonBehavior(submit));
+
+        bindHeightTo("modalScroll");
     }
 
     private TitledAjaxSubmitLink createSubmitButton() {
@@ -177,7 +187,7 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
                     getPage().info(message);
                 }
                 AjaxUtils.refreshFeedback(target);
-                target.addComponent(layoutListPanel);
+                target.add(layoutListPanel);
                 close(target);
             }
         };
@@ -192,6 +202,46 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
         titledBorder.add(new SchemaHelpBubble(id + ".help"));
 
         return textField;
+    }
+
+    private void addRegExBorder() {
+        TitledBorder regExBorder = new TitledBorder("regExBorder");
+        regExBorder.add(new CollapsibleBehavior());
+        form.add(regExBorder);
+
+        final Label artifactRegExLabel = new Label("artifactRegExLabel", Model.of());
+        artifactRegExLabel.setOutputMarkupId(true);
+        regExBorder.add(artifactRegExLabel);
+
+        final Label descriptorRegExLabel = new Label("descriptorRegExLabel", Model.of());
+        descriptorRegExLabel.setOutputMarkupId(true);
+        regExBorder.add(descriptorRegExLabel);
+
+        TitledAjaxSubmitLink resolveRegExButton = new TitledAjaxSubmitLink("resolveRegEx", "Resolve", form) {
+
+            @Override
+            protected void onSubmit(AjaxRequestTarget target, Form<?> form) {
+                try {
+                    String artifactRegEx = RepoLayoutUtils.generateRegExpFromPattern(entity,
+                            entity.getArtifactPathPattern());
+                    artifactRegExLabel.setDefaultModelObject(artifactRegEx);
+
+                    if (entity.isDistinctiveDescriptorPathPattern()) {
+                        String descriptorRegEx = RepoLayoutUtils.generateRegExpFromPattern(entity,
+                                entity.getDescriptorPathPattern());
+                        descriptorRegExLabel.setDefaultModelObject(descriptorRegEx);
+                    }
+                    target.add(artifactRegExLabel);
+                    target.add(descriptorRegExLabel);
+                } catch (Exception e) {
+                    error("Failed to resolve regular expression: " + ExceptionUtils.getRootCause(e).getMessage());
+                }
+                ModalHandler.resizeAndCenterCurrent();
+                AjaxUtils.refreshFeedback();
+            }
+        };
+
+        regExBorder.add(resolveRegExButton);
     }
 
     private void addTestBorder() {
@@ -209,6 +259,8 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
         testBorder.add(new Label("classifier"));
         testBorder.add(new Label("ext"));
         testBorder.add(new Label("type"));
+        final RepeatingView customFieldsView = new RepeatingView("customFields");
+        testBorder.add(customFieldsView);
 
         testBorder.add(new TextField<String>("pathToTest", new PropertyModel<String>(this, "pathToTest")));
 
@@ -224,23 +276,38 @@ public class LayoutCreateUpdatePanel extends CreateUpdatePanel<RepoLayout> {
                 try {
                     ModuleInfo moduleInfo = null;
                     if (entity.isDistinctiveDescriptorPathPattern()) {
+                        RepoLayoutUtils.generateRegExpFromPattern(entity, entity.getDescriptorPathPattern(), true);
                         moduleInfo = ModuleInfoUtils.moduleInfoFromDescriptorPath(pathToTest, entity);
                     }
                     if ((moduleInfo == null) || !moduleInfo.isValid()) {
+                        RepoLayoutUtils.generateRegExpFromPattern(entity, entity.getArtifactPathPattern(), true);
                         moduleInfo = ModuleInfoUtils.moduleInfoFromArtifactPath(pathToTest, entity);
                     }
                     testBorder.setDefaultModelObject(moduleInfo);
                     organization.setVisible(true);
-                    target.addComponent(testBorder);
+                    updateCustomFields(customFieldsView, moduleInfo.getCustomFields());
+                    target.add(testBorder);
                 } catch (Exception e) {
                     error("Failed to test path: " + ExceptionUtils.getRootCause(e).getMessage());
                 }
-                ModalHandler.resizeAndCenterCurrent(target);
+                ModalHandler.resizeAndCenterCurrent();
                 AjaxUtils.refreshFeedback();
             }
         };
 
         testBorder.add(testPatternsButton);
+    }
+
+    private void updateCustomFields(RepeatingView customFieldsView, Map<String, String> customFields) {
+        customFieldsView.removeAll();
+        if (customFields != null) {
+            for (Map.Entry<String, String> entry : customFields.entrySet()) {
+                WebMarkupContainer container = new WebMarkupContainer(customFieldsView.newChildId());
+                container.add(new Label("key", entry.getKey() + ":"));
+                container.add(new Label("value", entry.getValue()));
+                customFieldsView.add(container);
+            }
+        }
     }
 
     private static class ReadOnlyOnDisabledTextField<T> extends TextField<T> {

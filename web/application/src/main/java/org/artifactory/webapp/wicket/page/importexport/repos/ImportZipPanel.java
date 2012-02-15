@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -21,17 +21,16 @@ package org.artifactory.webapp.wicket.page.importexport.repos;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.wicket.Page;
-import org.apache.wicket.RequestCycle;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.context.ContextHelper;
-import org.artifactory.api.repo.RepoPathImpl;
 import org.artifactory.common.ArtifactoryHome;
 import org.artifactory.common.wicket.component.help.HelpBubble;
 import org.artifactory.common.wicket.panel.upload.UploadListener;
 import org.artifactory.common.wicket.util.WicketUtils;
 import org.artifactory.log.LoggerFactory;
+import org.artifactory.repo.InternalRepoPathFactory;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.traffic.TrafficService;
 import org.artifactory.traffic.entry.UploadEntry;
@@ -98,11 +97,16 @@ public class ImportZipPanel extends BasicImportPanel implements UploadListener {
         return sb.toString();
     }
 
+    @Override
+    public void info(String message) {
+        super.info(message);
+    }
+
     private String getRepoSelectHelpText() {
         StringBuilder sb = new StringBuilder();
         sb.append("Selects where to import the uploaded content.\n");
         sb.append(
-                "If the archive contains only artficat libraries, select the repository you would like to import them to.\n");
+                "If the archive contains only artifact libraries, select the repository you would like to import them to.\n");
         sb.append(
                 "In a case where the archive contains a structure similar to that of a collection of repositories,\n");
         sb.append("Select \"All Repositories\".");
@@ -115,15 +119,17 @@ public class ImportZipPanel extends BasicImportPanel implements UploadListener {
         super.refreshImportPanel(form, target);
     }
 
+    @Override
     public void onException() {
         getImportForm().setVisible(false);
     }
 
+    @Override
     public void onFileSaved(File file) {
         ZipInputStream zipinputstream = null;
         FileOutputStream fos = null;
         File uploadedFile = null;
-        File destFolder = null;
+        File destFolder;
         try {
             uploadedFile = uploadForm.getUploadedFile();
             zipinputstream = new ZipInputStream(new FileInputStream(uploadedFile));
@@ -181,7 +187,7 @@ public class ImportZipPanel extends BasicImportPanel implements UploadListener {
 
         //Report the uploaded file to the traffic logger
         if ((uploadedFile != null) && (uploadedFile.exists())) {
-            RepoPath repoPath = new RepoPathImpl(getTargetRepoKey(), "");
+            RepoPath repoPath = InternalRepoPathFactory.create(getTargetRepoKey(), "");
             UploadEntry uploadEntry = new UploadEntry(repoPath.getId(), uploadedFile.length(), 0);
             trafficService.handleTrafficEntry(uploadEntry);
         }
@@ -191,7 +197,7 @@ public class ImportZipPanel extends BasicImportPanel implements UploadListener {
     protected void onDetach() {
         super.onDetach();
         //Cleanup resources if we are not staying on the same page
-        Page targetPage = RequestCycle.get().getResponsePage();
+        Page targetPage = WicketUtils.getPage();
         Page page = getPage();
         if (targetPage != null && !page.equals(targetPage)) {
             cleanupResources();

@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -30,6 +30,7 @@ import org.artifactory.common.wicket.component.border.fieldset.FieldSetBorder;
 import org.artifactory.common.wicket.component.border.titled.TitledBorder;
 import org.artifactory.common.wicket.component.label.highlighter.Syntax;
 import org.artifactory.common.wicket.util.WicketUtils;
+import org.artifactory.fs.FileInfo;
 import org.artifactory.ivy.IvyService;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.webapp.actionable.FileActionable;
@@ -91,7 +92,7 @@ public class XmlViewTabPanel extends Panel {
 
 
     private String getContent(FileActionable item) {
-        org.artifactory.fs.FileInfo info = item.getFileInfo();
+        FileInfo info = item.getFileInfo();
         return repoService.getStringContent(info);
     }
 

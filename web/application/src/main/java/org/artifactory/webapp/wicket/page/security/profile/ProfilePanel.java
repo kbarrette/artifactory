@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -39,7 +39,6 @@ import org.apache.wicket.validation.validator.EmailAddressValidator;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.api.security.SecurityService;
 import org.artifactory.api.security.UserGroupService;
-import org.artifactory.api.security.UserInfo;
 import org.artifactory.common.wicket.ajax.NoAjaxIndicatorDecorator;
 import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.border.fieldset.FieldSetBorder;
@@ -51,13 +50,16 @@ import org.artifactory.common.wicket.component.panel.titled.TitledActionPanel;
 import org.artifactory.common.wicket.util.AjaxUtils;
 import org.artifactory.common.wicket.util.SetEnableVisitor;
 import org.artifactory.common.wicket.util.WicketUtils;
+import org.artifactory.factory.InfoFactoryHolder;
 import org.artifactory.log.LoggerFactory;
 import org.artifactory.security.AccessLogger;
 import org.artifactory.security.CryptoHelper;
+import org.artifactory.security.InternalUsernamePasswordAuthenticationToken;
+import org.artifactory.security.MutableUserInfo;
+import org.artifactory.security.UserInfo;
 import org.artifactory.webapp.wicket.util.validation.PasswordStreangthValidator;
 import org.slf4j.Logger;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.util.StringUtils;
@@ -154,6 +156,7 @@ public class ProfilePanel extends TitledActionPanel {
 
         //Cancel
         TitledAjaxLink cancelLink = new TitledAjaxLink("cancel", "Cancel") {
+            @Override
             public void onClick(AjaxRequestTarget target) {
                 setResponsePage(Application.get().getHomePage());
             }
@@ -197,12 +200,12 @@ public class ProfilePanel extends TitledActionPanel {
                     super.onError(target, e);
                     String password = getFormComponent().getRawInput();
                     newPassword.setDefaultModelObject(password);
-                    target.addComponent(strength);
+                    target.add(strength);
                 }
 
                 @Override
                 protected void onUpdate(AjaxRequestTarget target) {
-                    target.addComponent(strength);
+                    target.add(strength);
                 }
             }.setThrottleDelay(Duration.seconds(0.5)));
 
@@ -234,30 +237,29 @@ public class ProfilePanel extends TitledActionPanel {
                 } else if (!StringUtils.hasText(profile.getEmail())) {
                     error("Field 'Email address' is required.");
                 } else {
-                    userInfo.setEmail(profile.getEmail());
+                    MutableUserInfo mutableUser = InfoFactoryHolder.get().copyUser(userInfo);
+                    mutableUser.setEmail(profile.getEmail());
                     if (!authService.isDisableInternalPassword()) {
                         String newPassword = profile.getNewPassword();
                         if (StringUtils.hasText(newPassword)) {
-                            userInfo.setPassword(DigestUtils.md5Hex(newPassword));
+                            mutableUser.setPassword(DigestUtils.md5Hex(newPassword));
                             profile.setCurrentPassword(newPassword);
 
                             // generate a new KeyPair and update the user profile
-                            regenerateKeyPair(userInfo);
+                            regenerateKeyPair(mutableUser);
 
                             // display the encrypted password
                             if (securityService.isPasswordEncryptionEnabled()) {
-                                displayEncryptedPassword(userInfo);
+                                displayEncryptedPassword(mutableUser);
                             }
                         }
                     }
-                }
-                if (!this.hasErrorMessage()) {
-                    userGroupService.updateUser(userInfo);
-                    AccessLogger.updated("User " + userInfo.getUsername() + " has updated his profile successfully");
+                    userGroupService.updateUser(mutableUser);
+                    AccessLogger.updated("User " + mutableUser.getUsername() + " has updated his profile successfully");
                     info("Profile successfully updated.");
                 }
                 form.clearInput();
-                target.addComponent(ProfilePanel.this);
+                target.add(ProfilePanel.this);
                 AjaxUtils.refreshFeedback(target);
             }
         };
@@ -275,29 +277,31 @@ public class ProfilePanel extends TitledActionPanel {
     }
 
     private void unlockProfile(UserInfo userInfo) {
-        unlockForm.visitChildren(new SetEnableVisitor<Component>(false));
+        unlockForm.visitChildren(new SetEnableVisitor(false));
 
         if (authService.isUpdatableProfile()) {
-            profileForm.visitChildren(new SetEnableVisitor<Component>(true));
-            getButtonsContainer().visitChildren(new SetEnableVisitor<Component>(true));
+            profileForm.visitChildren(new SetEnableVisitor(true));
+            getButtonsContainer().visitChildren(new SetEnableVisitor(true));
         }
 
+        MutableUserInfo mutableUser = InfoFactoryHolder.get().copyUser(userInfo);
+
         // generate a new KeyPair and update the user profile
-        regenerateKeyPair(userInfo);
+        regenerateKeyPair(mutableUser);
 
         // display the encrypted password
         if (securityService.isPasswordEncryptionEnabled()) {
-            displayEncryptedPassword(userInfo);
+            displayEncryptedPassword(mutableUser);
         }
     }
 
-    private void regenerateKeyPair(UserInfo userInfo) {
-        if (!StringUtils.hasText(userInfo.getPrivateKey())) {
-            log.debug("Generating new KeyPair for {}", userInfo.getUsername());
+    private void regenerateKeyPair(MutableUserInfo mutableUser) {
+        if (!StringUtils.hasText(mutableUser.getPrivateKey())) {
+            log.debug("Generating new KeyPair for {}", mutableUser.getUsername());
             KeyPair keyPair = CryptoHelper.generateKeyPair();
-            userInfo.setPrivateKey(CryptoHelper.toBase64(keyPair.getPrivate()));
-            userInfo.setPublicKey(CryptoHelper.toBase64(keyPair.getPublic()));
-            userGroupService.updateUser(userInfo);
+            mutableUser.setPrivateKey(CryptoHelper.toBase64(keyPair.getPrivate()));
+            mutableUser.setPublicKey(CryptoHelper.toBase64(keyPair.getPublic()));
+            userGroupService.updateUser(mutableUser);
         }
     }
 
@@ -350,14 +354,15 @@ public class ProfilePanel extends TitledActionPanel {
             } else {
                 unlockProfile(userInfo);
             }
-            target.addComponent(ProfilePanel.this);
+            target.add(ProfilePanel.this);
             AjaxUtils.refreshFeedback(target);
         }
 
         private boolean authenticate(UserInfo userInfo, String enteredCurrentPassword) {
             try {
                 Authentication authentication = authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(userInfo.getUsername(), enteredCurrentPassword));
+                        new InternalUsernamePasswordAuthenticationToken(userInfo.getUsername(),
+                                enteredCurrentPassword));
                 return (authentication != null) && authentication.isAuthenticated();
             } catch (AuthenticationException e) {
                 return false;

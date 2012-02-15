@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -19,19 +19,20 @@
 package org.artifactory.webapp.wicket.page.security.user.column;
 
 import com.google.common.collect.Lists;
-import org.apache.wicket.PageParameters;
+import org.apache.wicket.AttributeModifier;
 import org.apache.wicket.ajax.AjaxRequestTarget;
-import org.apache.wicket.behavior.SimpleAttributeModifier;
 import org.apache.wicket.extensions.markup.html.basic.SmartLinkLabel;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.panel.Panel;
 import org.apache.wicket.model.IModel;
+import org.apache.wicket.request.mapper.parameter.PageParameters;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.api.security.UserAwareAuthenticationProvider;
 import org.artifactory.api.security.UserGroupService;
-import org.artifactory.api.security.UserInfo;
 import org.artifactory.common.wicket.component.deletable.listview.DeletableLabelGroup;
+import org.artifactory.security.UserGroupInfo;
+import org.artifactory.security.UserInfo;
 import org.artifactory.webapp.wicket.page.config.security.general.SecurityGeneralConfigPage;
 import org.artifactory.webapp.wicket.page.security.user.UserModel;
 
@@ -53,12 +54,12 @@ public class UsernamePanel extends Panel {
 
     public UsernamePanel(String id, IModel<UserModel> model) {
         super(id);
-        add(new SimpleAttributeModifier("class", "UserColumn"));
+        add(new AttributeModifier("class", "UserColumn"));
         final UserModel userModel = model.getObject();
         final String username = userModel.getUsername();
 
         if (UserInfo.ANONYMOUS.equals(username) && !authorizationService.isAnonAccessEnabled()) {
-            CharSequence pageUrl = getRequestCycle().urlFor(SecurityGeneralConfigPage.class, PageParameters.NULL);
+            CharSequence pageUrl = getRequestCycle().urlFor(SecurityGeneralConfigPage.class, new PageParameters());
             add(new SmartLinkLabel("username", username + " (<a href=\"" + pageUrl + "\">disabled</a>)").
                     setEscapeModelStrings(false));
         } else {
@@ -66,13 +67,13 @@ public class UsernamePanel extends Panel {
             add(new Label("username", username));
         }
 
-        Set<UserInfo.UserGroupInfo> userGroups = userModel.getGroups();
+        Set<UserGroupInfo> userGroups = userModel.getGroups();
         provider.addExternalGroups(username, userModel.getRealm(), userGroups);
 
-        DeletableLabelGroup<UserInfo.UserGroupInfo> groups =
-                new DeletableLabelGroup<UserInfo.UserGroupInfo>("groups", userGroups) {
+        DeletableLabelGroup<UserGroupInfo> groups =
+                new DeletableLabelGroup<UserGroupInfo>("groups", userGroups) {
                     @Override
-                    public void onDelete(UserInfo.UserGroupInfo value, AjaxRequestTarget target) {
+                    public void onDelete(UserGroupInfo value, AjaxRequestTarget target) {
                         super.onDelete(value, target);
                         //Save the group changes on each delete
                         userGroupService.removeUsersFromGroup(value.getGroupName(), Lists.newArrayList(username));

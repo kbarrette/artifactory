@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -69,7 +69,7 @@ public class ArtifactoryUpdatesPanel extends Panel {
         template.setVisible(false);
         add(template);
 
-        if (message == null) {
+        if (message == null || message == ArtifactoryUpdatesService.PROCESSING_MESSAGE) {
             // no cached message, retry again in 5 secs
             scheduleMessageFetch();
         } else {
@@ -88,9 +88,9 @@ public class ArtifactoryUpdatesPanel extends Panel {
             protected void onTimer(AjaxRequestTarget target) {
                 stop();
                 final Message message = artifactoryUpdatesService.getCachedMessage();
-                if (message != null) {
+                if (message != null && message != ArtifactoryUpdatesService.PROCESSING_MESSAGE) {
                     setupMessage(message);
-                    target.addComponent(ArtifactoryUpdatesPanel.this);
+                    target.add(ArtifactoryUpdatesPanel.this);
                 }
             }
         });
@@ -135,8 +135,8 @@ public class ArtifactoryUpdatesPanel extends Panel {
         }
 
         @Override
-        public void renderHead(IHeaderResponse response) {
-            response.renderOnDomReadyJavascript(
+        public void renderHead(Component component, IHeaderResponse response) {
+            response.renderOnDomReadyJavaScript(
                     String.format("ArtifactoryUpdates.fadeIn('%s');", component.getMarkupId()));
         }
     }

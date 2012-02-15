@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -85,6 +85,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
         selectPath(defaultSelection);
     }
 
+    @Override
     public void setCompactAllowed(boolean compactAllowed) {
         HierarchicActionableItem root = this.itemsProvider.getRoot();
         if (root != null) {
@@ -120,6 +121,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
         }
     }
 
+    @Override
     public boolean isCompactAllowed() {
         return ((Compactable) getTreeModel().getRoot()).isCompactAllowed();
     }
@@ -228,10 +230,16 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
     private void showContextMenu(Component item, ActionableItemTreeNode node, AjaxRequestTarget target) {
         ActionsMenuPanel menuPanel = new ActionsMenuPanel("contextMenu", node);
         getParent().replace(menuPanel);
-        target.addComponent(menuPanel);
-        target.appendJavascript(format("ActionsMenuPanel.show('%s');", item.getMarkupId()));
+        target.add(menuPanel);
+        target.appendJavaScript(format("ActionsMenuPanel.show('%s');", item.getMarkupId()));
     }
 
+    /**
+     * User clicked on the junction link to expand/collapse a (hierarchical) node. In case of expand, refresh the node
+     * children.
+     *
+     * @param node The node to expand/collapse.
+     */
     @Override
     public void onJunctionLinkClicked(AjaxRequestTarget target, TreeNode node) {
         super.onJunctionLinkClicked(target, node);
@@ -243,7 +251,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
     }
 
     public void adjustLayout(AjaxRequestTarget target) {
-        target.appendJavascript("dijit.byId('browseTree').layout();");
+        target.appendJavaScript("dijit.byId('browseTree').layout();");
     }
 
     private void refreshChildren(ActionableItemTreeNode actionableItemTreeNode) {
@@ -258,7 +266,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
     protected void onNodeLinkClicked(AjaxRequestTarget target, TreeNode node) {
         super.onNodeLinkClicked(target, node);
         selectNode(node);
-        target.addComponent(itemsProvider.getItemDisplayPanel());
+        target.add(itemsProvider.getItemDisplayPanel());
     }
 
     private void selectNode(TreeNode node) {
@@ -299,6 +307,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
         log.debug("Finished tree update ajax response.");
     }
 
+    @Override
     public void actionPerformed(ItemEvent e) {
         String command = e.getActionCommand();
 
@@ -325,7 +334,7 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
 
     private void expandNode(AjaxRequestTarget target, ActionableItemTreeNode node) {
         getTreeState().expandNode(node);
-        target.addComponent(this);
+        target.add(this);
         adjustLayout(target);
     }
 
@@ -357,9 +366,9 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
     }
 
     /**
-     * Collapse the parent node of the node containing the item and refreshe the tree.
+     * Collapse the parent node of the node containing the item and refresh the tree.
      *
-     * @param item The item to look for
+     * @param item The item the node contains
      */
     public void collapseItemNode(ActionableItem item) {
         ActionableItemTreeNode node = searchForNodeByItem(item);
@@ -369,6 +378,20 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
             if (AjaxRequestTarget.get() != null) {
                 expandNode(AjaxRequestTarget.get(), parent);
             }
+        }
+    }
+
+    /**
+     * Expand the node and refresh the node children.
+     *
+     * @param item The item the node contains
+     */
+    public void refreshAndExpandItemNode(ActionableItem item) {
+        ActionableItemTreeNode node = searchForNodeByItem(item);
+        if (AjaxRequestTarget.get() != null) {
+            getTreeState().collapseNode(node);
+            refreshChildren(node);
+            expandNode(AjaxRequestTarget.get(), node);
         }
     }
 
@@ -400,10 +423,10 @@ public class ActionableItemsTree extends Tree implements ItemActionListener, Com
         if (selectedNode != null && newSelection != null) {
             state.selectNode(selectedNode, false);
             state.selectNode(newSelection, true);
-            target.addComponent(this);
+            target.add(this);
             selectNode(newSelection);
-            target.addComponent(itemsProvider.getItemDisplayPanel());
-            target.appendJavascript("Browser.scrollToSelectedNode();");
+            target.add(itemsProvider.getItemDisplayPanel());
+            target.appendJavaScript("Browser.scrollToSelectedNode();");
         }
     }
 

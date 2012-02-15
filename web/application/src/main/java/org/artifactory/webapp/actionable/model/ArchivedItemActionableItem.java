@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -18,9 +18,10 @@
 
 package org.artifactory.webapp.actionable.model;
 
-import org.artifactory.api.repo.RepoPathImpl;
-import org.artifactory.api.tree.fs.ZipTreeNode;
+import org.artifactory.fs.ZipEntryInfo;
+import org.artifactory.repo.InternalRepoPathFactory;
 import org.artifactory.repo.RepoPath;
+import org.artifactory.util.TreeNode;
 import org.artifactory.webapp.actionable.RepoAwareActionableItemBase;
 
 /**
@@ -29,9 +30,9 @@ import org.artifactory.webapp.actionable.RepoAwareActionableItemBase;
  * @author Yossi Shaul
  */
 public abstract class ArchivedItemActionableItem extends RepoAwareActionableItemBase {
-    protected ZipTreeNode node;
+    protected TreeNode<ZipEntryInfo> node;
 
-    protected ArchivedItemActionableItem(RepoPath repoPath, ZipTreeNode node) {
+    protected ArchivedItemActionableItem(RepoPath repoPath, TreeNode<ZipEntryInfo> node) {
         super(repoPath);
         this.node = node;
     }
@@ -41,7 +42,7 @@ public abstract class ArchivedItemActionableItem extends RepoAwareActionableItem
      */
     @Override
     public RepoPath getRepoPath() {
-        return RepoPathImpl.archiveResourceRepoPath(super.getRepoPath(), node.getPath());
+        return InternalRepoPathFactory.archiveResourceRepoPath(super.getRepoPath(), node.getData().getPath());
     }
 
     /**

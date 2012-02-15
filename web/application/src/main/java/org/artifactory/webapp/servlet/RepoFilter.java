@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -20,6 +20,7 @@ package org.artifactory.webapp.servlet;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import org.apache.commons.httpclient.HttpStatus;
 import org.artifactory.api.context.ArtifactoryContext;
 import org.artifactory.api.context.ContextHelper;
 import org.artifactory.api.repo.RepositoryBrowsingService;
@@ -67,13 +68,15 @@ public class RepoFilter extends DelayedFilterBase {
         List<String> nonUiPrefixes = PathUtils.delimitedListToStringList(nonUiPathPrefixes, ",");
         RequestUtils.setNonUiPathPrefixes(nonUiPrefixes);
         List<String> uiPrefixes = PathUtils.delimitedListToStringList(uiPathPrefixes, ",");
-        uiPrefixes.add(RequestUtils.WEBAPP_URL_PATH_PREFIX);
+        uiPrefixes.add(HttpUtils.WEBAPP_URL_PATH_PREFIX);
         RequestUtils.setUiPathPrefixes(uiPrefixes);
     }
 
+    @Override
     public void destroy() {
     }
 
+    @Override
     public void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest request = (HttpServletRequest) req;
@@ -102,6 +105,12 @@ public class RepoFilter extends DelayedFilterBase {
             ArtifactoryResponse artifactoryResponse = new HttpArtifactoryResponse(response);
 
             if ("get".equals(method) && servletPath.endsWith("/")) {
+                //Check that this is not a recursive call
+                if (artifactoryRequest.isRecursive()) {
+                    String msg = "Recursive call detected for '" + request + "'. Returning nothing.";
+                    artifactoryResponse.sendError(HttpStatus.SC_NOT_FOUND, msg, log);
+                    return;
+                }
                 log.debug("Serving a directory get request.");
                 if (RequestUtils.isWebdavRequest(request)) {
                     doWebDavDirectory(response, artifactoryRequest);
@@ -172,7 +181,7 @@ public class RepoFilter extends DelayedFilterBase {
             log.debug("Serving an upload request.");
             getUploadEngine().process(artifactoryRequest, artifactoryResponse);
         } catch (Exception e) {
-            log.debug("Upload request of {} failed due to {}", artifactoryRequest.getRepoPath(), e.getMessage());
+            log.debug("Upload request of {} failed due to {}", artifactoryRequest.getRepoPath(), e);
             artifactoryResponse.sendInternalError(e, log);
         }
     }
@@ -200,6 +209,10 @@ public class RepoFilter extends DelayedFilterBase {
                 response.sendError(HttpServletResponse.SC_NOT_FOUND,
                         "Expected file response but received a directory response: " + e.getRepoPath());
             }
+        } catch (Exception e) {
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    "Could not process download request: " + e.getMessage());
+            log.debug("Error processing download request.", e);
         }
     }
 
@@ -221,7 +234,7 @@ public class RepoFilter extends DelayedFilterBase {
         HttpServletRequestWrapper requestWrapper = new InnerRequestWrapper(request, wicketRequest);
 
         RequestDispatcher dispatcher = request.getRequestDispatcher(
-                "/" + RequestUtils.WEBAPP_URL_PATH_PREFIX + "/" + SimpleRepoBrowserPage.PATH);
+                "/" + HttpUtils.WEBAPP_URL_PATH_PREFIX + "/" + SimpleRepoBrowserPage.PATH);
         dispatcher.forward(requestWrapper, response);
     }
 
@@ -241,7 +254,7 @@ public class RepoFilter extends DelayedFilterBase {
         request.setAttribute(ATTR_ARTIFACTORY_REQUEST_PROPERTIES, artifactoryRequest.getProperties());
 
         RequestDispatcher dispatcher =
-                request.getRequestDispatcher("/" + RequestUtils.WEBAPP_URL_PATH_PREFIX + "/" + ArtifactListPage.PATH);
+                request.getRequestDispatcher("/" + HttpUtils.WEBAPP_URL_PATH_PREFIX + "/" + ArtifactListPage.PATH);
         dispatcher.forward(request, response);
     }
 
@@ -306,6 +319,7 @@ public class RepoFilter extends DelayedFilterBase {
             this.repoKey = repoKey;
         }
 
+        @Override
         public boolean apply(@Nonnull VirtualRepoDescriptor input) {
             return repoKey.equals(input.getKey());
         }
@@ -339,7 +353,7 @@ public class RepoFilter extends DelayedFilterBase {
             if (wicketRequest) {
                 //All wicket request that come after direct repository
                 //browsing need to have the repo+path stripped
-                return "/" + RequestUtils.WEBAPP_URL_PATH_PREFIX + "/";
+                return "/" + HttpUtils.WEBAPP_URL_PATH_PREFIX + "/";
             } else if (removedRepoPath != null) {
                 //After login redirection
                 return "/" + removedRepoPath.getRepoKey() + "/" + removedRepoPath.getPath();

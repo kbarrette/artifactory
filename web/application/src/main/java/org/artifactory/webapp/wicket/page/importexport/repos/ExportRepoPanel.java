@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -27,7 +27,7 @@ import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.common.MultiStatusHolder;
-import org.artifactory.api.config.ExportSettings;
+import org.artifactory.api.config.ExportSettingsImpl;
 import org.artifactory.api.repo.BackupService;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.common.StatusEntry;
@@ -109,7 +109,7 @@ public class ExportRepoPanel extends TitledPanel {
             @Override
             protected void onOkClicked(AjaxRequestTarget target) {
                 super.onOkClicked(target);
-                target.addComponent(exportToPathTf);
+                target.add(exportToPathTf);
             }
         };
         browserButton.setMask(PathMask.FOLDERS);
@@ -139,7 +139,7 @@ public class ExportRepoPanel extends TitledPanel {
                     Session.get().cleanupFeedbackMessages();
                     //If we chose "All" run manual backup to dest dir, else export a single repo
                     MultiStatusHolder status = new MultiStatusHolder();
-                    ExportSettings exportSettings = new ExportSettings(exportToPath, status);
+                    ExportSettingsImpl exportSettings = new ExportSettingsImpl(exportToPath, status);
                     exportSettings.setIncludeMetadata(!excludeMetadata);
                     exportSettings.setM2Compatible(m2Compatible);
                     exportSettings.setVerbose(verbose);
@@ -171,7 +171,7 @@ public class ExportRepoPanel extends TitledPanel {
                     log.error(message, e);
                 }
                 AjaxUtils.refreshFeedback(target);
-                target.addComponent(form);
+                target.add(form);
             }
         };
         exportForm.add(exportButton);

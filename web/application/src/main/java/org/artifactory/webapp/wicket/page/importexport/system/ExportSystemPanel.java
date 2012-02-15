@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -28,7 +28,7 @@ import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.apache.wicket.util.time.Duration;
 import org.artifactory.api.common.MultiStatusHolder;
-import org.artifactory.api.config.ExportSettings;
+import org.artifactory.api.config.ExportSettingsImpl;
 import org.artifactory.api.context.ArtifactoryContext;
 import org.artifactory.api.context.ContextHelper;
 import org.artifactory.api.repo.RepositoryService;
@@ -44,11 +44,13 @@ import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.component.panel.titled.TitledPanel;
 import org.artifactory.common.wicket.util.AjaxUtils;
 import org.artifactory.common.wicket.util.WicketUtils;
+import org.artifactory.descriptor.repo.LocalRepoDescriptor;
 import org.artifactory.log.LoggerFactory;
 import org.artifactory.webapp.wicket.page.logs.SystemLogsPage;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -68,6 +70,9 @@ public class ExportSystemPanel extends TitledPanel {
 
     @WicketProperty
     private boolean excludeMetadata;
+
+    @WicketProperty
+    private boolean excludeBuilds;
 
     @WicketProperty
     private boolean excludeContent;
@@ -93,7 +98,7 @@ public class ExportSystemPanel extends TitledPanel {
             @Override
             protected void onOkClicked(AjaxRequestTarget target) {
                 super.onOkClicked(target);
-                target.addComponent(exportToPathTf);
+                target.add(exportToPathTf);
             }
         };
         browserButton.setMask(PathMask.FOLDERS);
@@ -114,6 +119,12 @@ public class ExportSystemPanel extends TitledPanel {
                 "Exclude Artifactory-specific metadata from the export.\n" +
                         "(Maven 2 metadata is unaffected by this setting)"));
 
+        final StyledCheckbox excludeBuildsCheckbox =
+                new StyledCheckbox("excludeBuilds", new PropertyModel(this, "excludeBuilds"));
+        excludeBuildsCheckbox.setOutputMarkupId(true);
+        exportForm.add(excludeBuildsCheckbox);
+        exportForm.add(new HelpBubble("excludeBuildsHelp", "Exclude all builds from the export."));
+
         final StyledCheckbox excludeContentCheckbox =
                 new StyledCheckbox("excludeContent", new PropertyModel(this, "excludeContent"));
         excludeContentCheckbox.setOutputMarkupId(true);
@@ -121,16 +132,21 @@ public class ExportSystemPanel extends TitledPanel {
             @Override
             protected void onUpdate(AjaxRequestTarget target) {
                 boolean excludeMDSelected = excludeMetadataCheckbox.isChecked();
+                boolean excludeBuildsSelected = excludeBuildsCheckbox.isChecked();
                 boolean excludeContentSelected = excludeContentCheckbox.isChecked();
                 if (excludeMDSelected != excludeContentSelected) {
                     excludeMetadataCheckbox.setDefaultModelObject(excludeContentSelected);
+                }
+                if(excludeBuildsSelected != excludeContentSelected) {
+                    excludeBuildsCheckbox.setDefaultModelObject(excludeContentSelected);
                 }
 
                 excludeMetadataCheckbox.setEnabled(!excludeContentSelected);
                 m2CompatibleCheckbox.setEnabled(!excludeContentSelected);
 
-                target.addComponent(excludeMetadataCheckbox);
-                target.addComponent(m2CompatibleCheckbox);
+                target.add(excludeMetadataCheckbox);
+                target.add(m2CompatibleCheckbox);
+                target.add(excludeBuildsCheckbox);
             }
         });
         exportForm.add(excludeContentCheckbox);
@@ -157,16 +173,17 @@ public class ExportSystemPanel extends TitledPanel {
                 try {
                     Session.get().cleanupFeedbackMessages();
                     status.reset();
-                    ExportSettings settings = new ExportSettings(exportToPath, status);
+                    ExportSettingsImpl settings = new ExportSettingsImpl(exportToPath, status);
                     settings.setCreateArchive(createArchive);
                     settings.setFailFast(false);
                     settings.setVerbose(verbose);
                     settings.setFailIfEmpty(true);
                     settings.setIncludeMetadata(!excludeMetadata);
+                    settings.setExcludeBuilds(excludeBuilds);
                     settings.setM2Compatible(m2Compatible);
                     settings.setExcludeContent(excludeContent);
                     if (!excludeContent) {
-                        settings.setRepositories(repositoryService.getLocalAndCachedRepoDescriptors());
+                        settings.setRepositories(getAllLocalRepoKeys());
                     }
                     context.exportTo(settings);
                     List<StatusEntry> warnings = status.getWarnings();
@@ -183,7 +200,7 @@ public class ExportSystemPanel extends TitledPanel {
                         }
                         error("Failed to export system to '" + exportToPath + "': " + message);
                     } else {
-                        File exportFile = status.getCallback();
+                        File exportFile = status.getOutputFile();
                         info("Successfully exported system to '" + exportFile.getPath() + "'.");
                     }
                 } catch (Exception e) {
@@ -205,5 +222,13 @@ public class ExportSystemPanel extends TitledPanel {
             }
         });
         //exportForm.add(statusLabel);
+    }
+
+    private List<String> getAllLocalRepoKeys() {
+        List<String> repoKeys = new ArrayList<String>();
+        for (LocalRepoDescriptor localRepoDescriptor : repositoryService.getLocalAndCachedRepoDescriptors()) {
+            repoKeys.add(localRepoDescriptor.getKey());
+        }
+        return repoKeys;
     }
 }

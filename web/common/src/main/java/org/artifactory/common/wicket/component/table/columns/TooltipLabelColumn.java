@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -28,6 +28,10 @@ import org.artifactory.common.wicket.component.label.tooltip.TooltipLabel;
  * @author Yoav Aharoni
  */
 public class TooltipLabelColumn<T> extends PropertyColumn<T> {
+    /**
+     * Maximum length of the text in the column. If the text the column will display characters up to the maxLength
+     * and trailing dots ('...')
+     */
     private int maxLength;
 
     public TooltipLabelColumn(IModel<String> displayModel, String sortProperty, String propertyExpression,

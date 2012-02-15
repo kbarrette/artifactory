@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   ~ Artifactory is a binaries repository manager.
-  ~ Copyright (C) 2011 JFrog Ltd.
+  ~ Copyright (C) 2012 JFrog Ltd.
   ~
   ~ Artifactory is free software: you can redistribute it and/or modify
   ~ it under the terms of the GNU Lesser General Public License as published by
@@ -22,9 +22,9 @@
     <name>Artifactory Web Application</name>
 
     <parent>
-        <groupId>org.artifactory</groupId>
         <artifactId>artifactory-web-parent</artifactId>
-        <version>2.3.4.1</version>
+        <groupId>org.artifactory</groupId>
+        <version>2.5.1</version>
     </parent>
 
     <build>
@@ -48,10 +48,19 @@
     </build>
 
     <dependencies>
+        <dependency>
+            <groupId>org.artifactory</groupId>
+            <artifactId>artifactory-log</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.artifactory</groupId>
             <artifactId>artifactory-common</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.artifactory</groupId>
+            <artifactId>artifactory-traffic</artifactId>
         </dependency>
 
         <dependency>
@@ -118,11 +127,6 @@
 
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.slf4j</groupId>
             <artifactId>jul-to-slf4j</artifactId>
         </dependency>
 
@@ -137,20 +141,8 @@
         </dependency>
 
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <!-- (overridden) compile scope to allow programmatic configuration -->
-            <scope>compile</scope>
-        </dependency>
-
-        <dependency>
             <groupId>com.ocpsoft</groupId>
             <artifactId>ocpsoft-pretty-time</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wicketstuff</groupId>
-            <artifactId>wicketstuff-annotation</artifactId>
         </dependency>
 
         <dependency>

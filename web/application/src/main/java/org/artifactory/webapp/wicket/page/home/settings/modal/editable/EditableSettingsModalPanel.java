@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -27,13 +27,15 @@ import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.apache.wicket.util.resource.StringResourceStream;
 import org.artifactory.addon.AddonsManager;
 import org.artifactory.addon.wicket.FilteredResourcesWebAddon;
-import org.artifactory.api.md.PropertiesImpl;
 import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.behavior.defaultbutton.DefaultButtonStyleModel;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.component.modal.links.ModalCloseLink;
 import org.artifactory.common.wicket.component.modal.panel.bordered.BorderedModalPanel;
+import org.artifactory.factory.InfoFactoryHolder;
 import org.artifactory.log.LoggerFactory;
+import org.artifactory.md.Properties;
+import org.artifactory.webapp.wicket.page.home.settings.modal.DownloadModalSettings;
 import org.artifactory.webapp.wicket.page.home.settings.modal.download.AjaxSettingsDownloadBehavior;
 import org.slf4j.Logger;
 
@@ -52,11 +54,13 @@ public class EditableSettingsModalPanel extends BorderedModalPanel {
     private AddonsManager addonsManager;
     private final TextArea<String> contentTextArea;
 
-    public EditableSettingsModalPanel(String content, final String settingsMimeType, String saveToFileName) {
-        contentTextArea = new TextArea<String>("content", Model.<String>of(content));
+    public EditableSettingsModalPanel(final DownloadModalSettings settings) {
+        contentTextArea = new TextArea<String>("content", Model.<String>of(settings.getContent()));
+        contentTextArea.setOutputMarkupId(true);
 
         FilteredResourcesWebAddon filteredResourcesWebAddon =
                 addonsManager.addonByType(FilteredResourcesWebAddon.class);
+        String saveToFileName = settings.getSaveToFileName();
         form.add(filteredResourcesWebAddon.getSettingsProvisioningBorder("settingsProvisioning", form, contentTextArea,
                 saveToFileName));
 
@@ -68,19 +72,21 @@ public class EditableSettingsModalPanel extends BorderedModalPanel {
                         FilteredResourcesWebAddon filteredResourcesWebAddon = addonsManager.addonByType(
                                 FilteredResourcesWebAddon.class);
                         try {
-                            String filtered = filteredResourcesWebAddon.filterResource(null, new PropertiesImpl(),
+                            String filtered = filteredResourcesWebAddon.filterResource(null,
+                                    (Properties) InfoFactoryHolder.get().createProperties(),
                                     new StringReader(contentTextArea.getModelObject()));
-                            return new StringResourceStream(filtered, settingsMimeType);
+                            return new StringResourceStream(filtered, settings.getSettingsMimeType());
                         } catch (Exception e) {
                             log.error("Unable to filter settings: " + e.getMessage());
-                            return new StringResourceStream(contentTextArea.getModelObject(), settingsMimeType);
+                            return new StringResourceStream(contentTextArea.getModelObject(),
+                                    settings.getSettingsMimeType());
                         }
                     }
                 };
 
         form.add(ajaxSettingsDownloadBehavior);
 
-        Component exportLink = new TitledAjaxSubmitLink("export", "Download Settings", form) {
+        Component exportLink = new TitledAjaxSubmitLink("export", settings.getDownloadButtonTitle(), form) {
             @Override
             protected void onSubmit(AjaxRequestTarget target, Form<?> form) {
                 ajaxSettingsDownloadBehavior.initiate(target);
@@ -96,8 +102,12 @@ public class EditableSettingsModalPanel extends BorderedModalPanel {
     }
 
     @Override
+    protected Component getContent() {
+        return contentTextArea;
+    }
+
+    @Override
     protected void addContentToBorder() {
-        contentTextArea.setOutputMarkupId(true);
         border.add(contentTextArea);
     }
 }

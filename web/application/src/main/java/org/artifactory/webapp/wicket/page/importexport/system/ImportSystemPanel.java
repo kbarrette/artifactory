@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -27,7 +27,7 @@ import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.api.common.MultiStatusHolder;
-import org.artifactory.api.config.ImportSettings;
+import org.artifactory.api.config.ImportSettingsImpl;
 import org.artifactory.api.context.ArtifactoryContext;
 import org.artifactory.api.context.ContextHelper;
 import org.artifactory.api.search.SearchService;
@@ -93,7 +93,7 @@ public class ImportSystemPanel extends TitledPanel {
             @Override
             protected void onOkClicked(AjaxRequestTarget target) {
                 super.onOkClicked(target);
-                target.addComponent(importToPathTf);
+                target.add(importToPathTf);
             }
         });
 
@@ -140,7 +140,7 @@ public class ImportSystemPanel extends TitledPanel {
                 boolean excludeContentSelected = excludeContentCheckbox.isChecked();
                 if (excludeMDSelected != excludeContentSelected) {
                     excludeMetadataCheckbox.setDefaultModelObject(excludeContentSelected);
-                    target.addComponent(excludeMetadataCheckbox);
+                    target.add(excludeMetadataCheckbox);
                 }
             }
         });
@@ -205,7 +205,7 @@ public class ImportSystemPanel extends TitledPanel {
                     }
                     status.setStatus("Importing from directory...", log);
                     ArtifactoryContext context = ContextHelper.get();
-                    ImportSettings importSettings = new ImportSettings(importFromFolder, status);
+                    ImportSettingsImpl importSettings = new ImportSettingsImpl(importFromFolder, status);
                     importSettings.setFailFast(false);
                     importSettings.setFailIfEmpty(true);
                     importSettings.setVerbose(verbose);

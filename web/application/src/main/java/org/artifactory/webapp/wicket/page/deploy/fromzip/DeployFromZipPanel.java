@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -102,19 +102,16 @@ public class DeployFromZipPanel extends TitledPanel implements UploadListener {
      * @return String - Text for archive selection help buble
      */
     private String getDeployHelp() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("When deploying an artifacts bundle, the file structure within the archive you select should be\n");
-        sb.append("similar to:\n");
-        sb.append("SELECTED_ARCHIVE.zip\n");
-        sb.append(" |\n");
-        sb.append(" |--org\n");
-        sb.append(" |--|--apache\n");
-        sb.append("\n");
-        sb.append("Please note that artifacts need to be stored in the archive in a Maven repository structure,\n");
-        sb.append("with no extra folders between the archive root and the artifact's first group directory.");
-        return sb.toString();
+        return "When deploying an artifacts bundle, the file structure within the archive you select will be " +
+                "maintained.";
     }
 
+    @Override
+    public void info(String message) {
+        super.info(message);
+    }
+
+    @Override
     public void onException() {
     }
 
@@ -132,6 +129,7 @@ public class DeployFromZipPanel extends TitledPanel implements UploadListener {
      *
      * @param file
      */
+    @Override
     @SuppressWarnings({"ThrowableResultOfMethodCallIgnored"})
     public void onFileSaved(File file) {
         File uploadedFile = deployForm.getUploadedFile();

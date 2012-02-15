@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -19,12 +19,12 @@
 package org.artifactory.webapp.actionable.action.metadata;
 
 import org.artifactory.api.context.ContextHelper;
-import org.artifactory.api.repo.exception.RepositoryRuntimeException;
 import org.artifactory.api.search.xml.metadata.MetadataSearchResult;
 import org.artifactory.common.wicket.component.label.highlighter.Syntax;
 import org.artifactory.common.wicket.util.WicketUtils;
 import org.artifactory.log.LoggerFactory;
 import org.artifactory.repo.RepoPath;
+import org.artifactory.sapi.common.RepositoryRuntimeException;
 import org.artifactory.webapp.actionable.RepoAwareActionableItem;
 import org.artifactory.webapp.actionable.action.ViewAction;
 import org.artifactory.webapp.actionable.event.RepoAwareItemEvent;

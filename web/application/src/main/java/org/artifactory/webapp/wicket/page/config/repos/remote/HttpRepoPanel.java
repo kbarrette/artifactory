@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -20,17 +20,20 @@ package org.artifactory.webapp.wicket.page.config.repos.remote;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.HttpMethodBase;
 import org.apache.commons.httpclient.HttpStatus;
-import org.apache.commons.httpclient.methods.HeadMethod;
 import org.apache.commons.lang.StringUtils;
+import org.apache.wicket.Component;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.extensions.markup.html.tabs.AbstractTab;
 import org.apache.wicket.extensions.markup.html.tabs.ITab;
 import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.panel.Panel;
 import org.apache.wicket.model.Model;
+import org.artifactory.addon.wicket.NuGetWebAddon;
 import org.artifactory.addon.wicket.PropertiesWebAddon;
 import org.artifactory.addon.wicket.ReplicationWebAddon;
+import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.CreateUpdateAction;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.util.AjaxUtils;
@@ -38,9 +41,13 @@ import org.artifactory.descriptor.config.MutableCentralConfigDescriptor;
 import org.artifactory.descriptor.property.PropertySet;
 import org.artifactory.descriptor.replication.RemoteReplicationDescriptor;
 import org.artifactory.descriptor.repo.HttpRepoDescriptor;
+import org.artifactory.log.LoggerFactory;
 import org.artifactory.util.HttpClientConfigurator;
+import org.artifactory.util.PathUtils;
 import org.artifactory.webapp.wicket.page.config.repos.CachingDescriptorHelper;
 import org.artifactory.webapp.wicket.page.config.repos.RepoConfigCreateUpdatePanel;
+import org.artifactory.webapp.wicket.panel.tabbed.tab.BaseTab;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -53,33 +60,38 @@ import java.util.List;
  * @author Yossi Shaul
  */
 public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescriptor> {
+    private static final Logger log = LoggerFactory.getLogger(HttpRepoPanel.class);
 
-    private final CreateUpdateAction action;
     private RemoteReplicationDescriptor replicationDescriptor;
 
     public HttpRepoPanel(CreateUpdateAction action, HttpRepoDescriptor repoDescriptor,
             CachingDescriptorHelper cachingDescriptorHelper) {
         super(action, repoDescriptor, cachingDescriptorHelper);
-        setWidth(640);
-        this.action = action;
+        setWidth(770);
     }
 
     @Override
     protected List<ITab> getConfigurationTabs() {
         List<ITab> tabs = Lists.newArrayList();
 
-        tabs.add(new AbstractTab(Model.<String>of("Basic Settings")) {
+        tabs.add(new AbstractTab(Model.of("Basic Settings")) {
             @Override
             public Panel getPanel(String panelId) {
                 return new HttpRepoBasicPanel(panelId, entity);
             }
         });
 
-        tabs.add(new AbstractTab(Model.<String>of("Advanced Settings")) {
+        tabs.add(new BaseTab(Model.of("Advanced Settings")) {
             @Override
             public Panel getPanel(String panelId) {
                 return new HttpRepoAdvancedPanel(panelId, action, entity,
                         cachingDescriptorHelper.getModelMutableDescriptor());
+            }
+
+            @Override
+            public void onNewTabLink(Component link) {
+                super.onNewTabLink(link);
+                link.add(new CssClass("wide-tab"));
             }
         });
 
@@ -94,8 +106,15 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
             replicationDescriptor.setRepoKey(entity.getKey());
         }
         ReplicationWebAddon replicationWebAddon = addons.addonByType(ReplicationWebAddon.class);
-        tabs.add(replicationWebAddon.getHttpRepoReplicationPanel("Replication", entity, replicationDescriptor));
+        tabs.add(replicationWebAddon.getHttpRepoReplicationPanel("Replication", entity, replicationDescriptor, action));
 
+        // packages tab contains add-ons configuration
+        tabs.add(new AbstractTab(Model.of("Packages")) {
+            @Override
+            public Panel getPanel(String panelId) {
+                return new HttpRepoPackagesPanel<HttpRepoDescriptor>(panelId, entity);
+            }
+        });
         return tabs;
     }
 
@@ -146,10 +165,14 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
                     AjaxUtils.refreshFeedback();
                     return;
                 }
-                HttpClient client = new HttpClientConfigurator(true)
-                        .hostFromUrl(repo.getUrl())
-                        .defaultMaxConnectionsPerHost(50)
-                        .maxTotalConnections(50)
+                // always test with url trailing slash
+                String url = PathUtils.addTrailingSlash(repo.getUrl());
+                NuGetWebAddon nuGetWebAddon = addons.addonByType(NuGetWebAddon.class);
+                HttpMethodBase testMethod = nuGetWebAddon.getRemoteRepoTestMethod(url, repo);
+                HttpClient client = new HttpClientConfigurator()
+                        .hostFromUrl(url)
+                        .defaultMaxConnectionsPerHost(5)
+                        .maxTotalConnections(5)
                         .connectionTimeout(repo.getSocketTimeoutMillis())
                         .soTimeout(repo.getSocketTimeoutMillis())
                         .staleCheckingEnabled(true)
@@ -158,23 +181,28 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
                         .proxy(repo.getProxy())
                         .authentication(repo.getUsername(), repo.getPassword())
                         .getClient();
-                HeadMethod head = new HeadMethod(repo.getUrl());
                 try {
-                    int status = client.executeMethod(head);
+                    int status = client.executeMethod(testMethod);
                     if (status != HttpStatus.SC_OK) {
-                        String reason = head.getStatusText();
+                        String reason = testMethod.getStatusText();
                         error("Connection failed: Error " + status + ": " + reason);
                     } else {
                         info("Successfully connected to server");
                     }
                 } catch (UnknownHostException e) {
                     error("Unknown host: " + e.getMessage());
+                    log.debug("Test connection to '" + url + "' failed with exception", e);
                 } catch (ConnectException e) {
                     error(e.getMessage());
+                    log.debug("Test connection to '" + url + "' failed with exception", e);
                 } catch (IOException e) {
                     error("Connection failed with exception: " + e.getMessage());
+                    log.debug("Test connection to '" + url + "' failed with exception", e);
+                } catch (Exception e) {
+                    error("Connection failed with general exception: " + e.getMessage());
+                    log.debug("Test connection to '" + url + "' failed with exception", e);
                 } finally {
-                    head.releaseConnection();
+                    testMethod.releaseConnection();
                 }
                 AjaxUtils.refreshFeedback(target);
             }

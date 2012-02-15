@@ -1,6 +1,6 @@
 /*
  * Artifactory is a binaries repository manager.
- * Copyright (C) 2011 JFrog Ltd.
+ * Copyright (C) 2012 JFrog Ltd.
  *
  * Artifactory is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -36,32 +36,40 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
+ * This is the root node of the tree browser. It contains all the repository nodes.
+ *
  * @author Yoav Landman
  */
 public class GlobalRepoActionableItem extends ActionableItemBase implements HierarchicActionableItem {
 
     private boolean compactAllowed;
 
+    @Override
     public boolean isCompactAllowed() {
         return compactAllowed;
     }
 
+    @Override
     public void setCompactAllowed(boolean compactAllowed) {
         this.compactAllowed = compactAllowed;
     }
 
+    @Override
     public String getDisplayName() {
         return "";
     }
 
+    @Override
     public String getCssClass() {
         return ItemCssClass.root.getCssClass();
     }
 
+    @Override
     public Panel newItemDetailsPanel(String id) {
         return new EmptyPanel(id);
     }
 
+    @Override
     public List<ActionableItem> getChildren(AuthorizationService authService) {
         //Add a tree node for each file repository and local cache repository
         RepositoryService repositoryService = ContextHelper.get().getRepositoryService();
@@ -77,10 +85,12 @@ public class GlobalRepoActionableItem extends ActionableItemBase implements Hier
         return items;
     }
 
+    @Override
     public boolean hasChildren(AuthorizationService authService) {
         return true;
     }
 
+    @Override
     public void filterActions(AuthorizationService authService) {
     }
 
