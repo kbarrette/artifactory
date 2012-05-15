@@ -18,8 +18,13 @@
 
 package org.artifactory.addon.plugin;
 
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Basic user plugin info
@@ -31,6 +36,9 @@ public class PluginInfo implements Serializable {
     private String name;
     private String version = "undefined";
     private String description;
+    private Set<String> permittedUsers = Sets.newHashSet();
+    private Set<String> permittedGroups = Sets.newHashSet();
+    private Map params = Maps.newHashMap();
 
     /**
      * @param name                Name of plugin (applicable to executions and jobs)
@@ -45,6 +53,26 @@ public class PluginInfo implements Serializable {
             if (pluginClosureParams.containsKey("description")) {
                 description = pluginClosureParams.get("description").toString();
             }
+            if (pluginClosureParams.containsKey("users")) {
+                Object users = pluginClosureParams.get("users");
+                if (users instanceof Collection) {
+                    permittedUsers.addAll(((Collection) users));
+                } else {
+                    permittedUsers.add(users.toString());
+                }
+            }
+            if (pluginClosureParams.containsKey("groups")) {
+                Object groups = pluginClosureParams.get("groups");
+                if (groups instanceof Collection) {
+                    permittedGroups.addAll(((Collection) groups));
+                } else {
+                    permittedGroups.add(groups.toString());
+                }
+            }
+            if (pluginClosureParams.containsKey("params")) {
+                Object paramsFromClosureConfig = pluginClosureParams.get("params");
+                params.putAll((Map) paramsFromClosureConfig);
+            }
         }
     }
 
@@ -58,6 +86,18 @@ public class PluginInfo implements Serializable {
 
     public String getDescription() {
         return description;
+    }
+
+    public boolean isUserPermitted(String user) {
+        return permittedUsers.contains(user);
+    }
+
+    public boolean isGroupPermitted(String group) {
+        return permittedGroups.contains(group);
+    }
+
+    public Map getParams() {
+        return params;
     }
 
     @Override
@@ -77,6 +117,15 @@ public class PluginInfo implements Serializable {
         if (name != null ? !name.equals(that.name) : that.name != null) {
             return false;
         }
+        if (params != null ? !params.equals(that.params) : that.params != null) {
+            return false;
+        }
+        if (permittedGroups != null ? !permittedGroups.equals(that.permittedGroups) : that.permittedGroups != null) {
+            return false;
+        }
+        if (permittedUsers != null ? !permittedUsers.equals(that.permittedUsers) : that.permittedUsers != null) {
+            return false;
+        }
         if (version != null ? !version.equals(that.version) : that.version != null) {
             return false;
         }
@@ -89,6 +138,9 @@ public class PluginInfo implements Serializable {
         int result = name != null ? name.hashCode() : 0;
         result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + (description != null ? description.hashCode() : 0);
+        result = 31 * result + (permittedUsers != null ? permittedUsers.hashCode() : 0);
+        result = 31 * result + (permittedGroups != null ? permittedGroups.hashCode() : 0);
+        result = 31 * result + (params != null ? params.hashCode() : 0);
         return result;
     }
 }

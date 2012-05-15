@@ -18,13 +18,14 @@
 
 package org.artifactory.jcr;
 
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.apache.commons.lang.StringUtils;
 import org.apache.jackrabbit.api.JackrabbitRepository;
-import org.apache.jackrabbit.core.GarbageCollectorFactory;
 import org.apache.jackrabbit.core.RepositoryImpl;
 import org.apache.jackrabbit.core.data.DataIdentifier;
 import org.apache.jackrabbit.core.data.DataRecord;
@@ -61,7 +62,6 @@ import org.artifactory.jcr.fs.JcrFolder;
 import org.artifactory.jcr.fs.JcrFsItem;
 import org.artifactory.jcr.fs.JcrTreeNode;
 import org.artifactory.jcr.fs.JcrTreeNodeFileFilter;
-import org.artifactory.jcr.gc.JcrGarbageCollector;
 import org.artifactory.jcr.jackrabbit.ExtendedDbDataStore;
 import org.artifactory.jcr.lock.aop.LockingAdvice;
 import org.artifactory.jcr.md.MetadataDefinitionService;
@@ -72,6 +72,7 @@ import org.artifactory.jcr.utils.JcrHelper;
 import org.artifactory.jcr.utils.JcrUtils;
 import org.artifactory.jcr.version.JcrVersion;
 import org.artifactory.log.LoggerFactory;
+import org.artifactory.mime.NamingUtils;
 import org.artifactory.repo.InternalRepoPathFactory;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.repo.interceptor.ImportInterceptors;
@@ -88,12 +89,12 @@ import org.artifactory.sapi.search.VfsComparatorType;
 import org.artifactory.sapi.search.VfsQueryResult;
 import org.artifactory.sapi.search.VfsQueryService;
 import org.artifactory.sapi.search.VfsRepoQuery;
-import org.artifactory.schedule.TaskInterruptedException;
 import org.artifactory.security.AccessLogger;
 import org.artifactory.spring.ContextReadinessListener;
 import org.artifactory.spring.Reloadable;
 import org.artifactory.storage.StorageConstants;
 import org.artifactory.tx.SessionResource;
+import org.artifactory.util.ExceptionUtils;
 import org.artifactory.util.LoggingUtils;
 import org.artifactory.version.CompoundVersionDetails;
 import org.slf4j.Logger;
@@ -110,6 +111,7 @@ import javax.jcr.Binary;
 import javax.jcr.ImportUUIDBehavior;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.Property;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -539,12 +541,15 @@ public class JcrServiceImpl implements JcrService, JcrRepoService, ContextReadin
     public JcrFsItem getFsItem(RepoPath repoPath, JcrFsItemFactory repo) {
         JcrSession session = getManagedSession();
         String absPath = PathFactoryHolder.get().getAbsolutePath(repoPath);
-        boolean exits = itemNodeExists(absPath);
-        if (exits) {
+        try {
             Node node = (Node) session.getItem(absPath);
             return getFsItem(node, repo);
-        } else {
-            return null;
+        } catch (RuntimeException e) {
+            if (ExceptionUtils.getCauseOfTypes(e, PathNotFoundException.class) != null) {
+                log.debug("Path not found : {}.", repoPath);
+                return null;
+            }
+            throw e;
         }
     }
 
@@ -804,7 +809,7 @@ public class JcrServiceImpl implements JcrService, JcrRepoService, ContextReadin
     }
 
     @Override
-    public void ping() {
+    public synchronized void ping() {
         JcrSession session = null;
         try {
             session = getUnmanagedSession();
@@ -956,7 +961,6 @@ public class JcrServiceImpl implements JcrService, JcrRepoService, ContextReadin
         return types;
     }
 
-    @SuppressWarnings({"unchecked"})
     private static void cleanupAfterLastShutdown() {
         //Cleanup any left over bin*.tmp files from the temp directory, due to unclean shutdown
         String tmpDirPath;
@@ -1037,6 +1041,22 @@ public class JcrServiceImpl implements JcrService, JcrRepoService, ContextReadin
 
     @Override
     public ArtifactCount getArtifactCount(@Nullable String repoKey) {
+
+        if (StringUtils.isNotBlank(repoKey) && ConstantValues.searchArtifactSearchUseV2Storage.getBoolean()) {
+            repoKey = StringUtils.isBlank(repoKey) ? "" : repoKey + "/";
+            ChecksumPaths checksumPaths = ContextHelper.get().beanForType(ChecksumPaths.class);
+            ImmutableCollection<String> fileOrPathsLike = checksumPaths.getFileOrPathsLike(Lists.newArrayList("%"),
+                    Lists.newArrayList("/repositories/" + repoKey + "%"));
+            int realArtifactsCount = 0;
+            // remove metadata entries
+            for (String s : fileOrPathsLike) {
+                if (!s.contains(NamingUtils.METADATA_PREFIX)) {
+                    realArtifactsCount++;
+                }
+            }
+            return new ArtifactCount(realArtifactsCount);
+        }
+
         StringBuilder sb = new StringBuilder();
 
         if (StringUtils.isNotBlank(repoKey)) {
@@ -1095,58 +1115,20 @@ public class JcrServiceImpl implements JcrService, JcrRepoService, ContextReadin
                 return null;
             }
 
-            if (ConstantValues.gcUseV1.getBoolean()) {
-                GarbageCollectorInfo result = null;
-                JcrGarbageCollector gc = null;
+            //fixConsistency for v2 storage should only run at startup time - no need to call it
+            ChecksumPaths cspaths = ContextHelper.get().beanForType(ChecksumPaths.class);
+            GarbageCollectorInfo collect = cspaths.cleanupDeleted();
+            long storageSize = -1;
+            //Only calculate the size on debug
+            if (LoggerFactory.getLogger(GarbageCollectorInfo.class).isDebugEnabled()) {
                 try {
-                    gc = GarbageCollectorFactory.createDataStoreGarbageCollector(session, fixConsistency);
-                    if (gc != null) {
-                        log.debug("Running " + gc.getClass().getName() + " datastore garbage collector...");
-                        if (gc.scan()) {
-                            gc.stopScan();
-                            int count = gc.deleteUnused();
-                            if (count > 0) {
-                                log.info("Datastore garbage collector deleted " + count + " unreferenced item(s).");
-                            } else {
-                                log.debug("Datastore garbage collector deleted " + count + " unreferenced item(s).");
-                            }
-                        } else {
-                            log.debug("Datastore garbage collector execution completed.");
-                        }
-                        result = gc.getInfo();
-                        gc = null;
-                    }
-                } catch (TaskInterruptedException e) {
-                    log.warn(e.getMessage());
-                } catch (Exception e) {
-                    log.error("Datastore garbage collector execution failed.", e);
-                } finally {
-                    if (gc != null) {
-                        try {
-                            gc.stopScan();
-                        } catch (RepositoryException re) {
-                            log.debug("Datastore garbage collector scanning could not be stopped.", re);
-                        }
-                    }
+                    storageSize = JcrUtils.getExtendedDataStore(session).getStorageSize();
+                } catch (RepositoryException e) {
+                    log.debug("Unable to measure storage size for the GC summary.", e);
                 }
-                return result;
-            } else {
-                //Call the new gc
-                //fixConsistency for v2 storage should only run at startup time - no need to call it
-                ChecksumPaths cspaths = ContextHelper.get().beanForType(ChecksumPaths.class);
-                GarbageCollectorInfo collect = cspaths.cleanupDeleted();
-                long storageSize = -1;
-                //Only calculate the size on debug
-                if (LoggerFactory.getLogger(GarbageCollectorInfo.class).isDebugEnabled()) {
-                    try {
-                        storageSize = JcrUtils.getExtendedDataStore(session).getStorageSize();
-                    } catch (RepositoryException e) {
-                        log.debug("Unable to measure storage size for the GC summary.", e);
-                    }
-                }
-                collect.printV2CollectionInfo(storageSize);
-                return collect;
             }
+            collect.printCollectionInfo(storageSize);
+            return collect;
         } finally {
             session.logout();
         }

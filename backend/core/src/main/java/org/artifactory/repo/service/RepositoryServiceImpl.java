@@ -108,6 +108,7 @@ import org.artifactory.repo.virtual.VirtualRepo;
 import org.artifactory.request.InternalArtifactoryResponse;
 import org.artifactory.request.InternalRequestContext;
 import org.artifactory.request.NullRequestContext;
+import org.artifactory.request.RequestTraceLogger;
 import org.artifactory.resource.ResolvedResource;
 import org.artifactory.resource.ResourceStreamHandle;
 import org.artifactory.resource.UnfoundRepoResource;
@@ -153,6 +154,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -219,6 +222,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     @Override
     public void init() {
         rebuildRepositories(null);
+        HttpUtils.resetArtifactoryUserAgent();
         try {
             //Dump info to the log
             InfoWriter.writeInfo();
@@ -230,6 +234,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
 
     @Override
     public void reload(CentralConfigDescriptor oldDescriptor) {
+        HttpUtils.resetArtifactoryUserAgent();
         deleteOrphanRepos(oldDescriptor);
         rebuildRepositories(oldDescriptor);
         checkAndCleanChangedVirtualPomCleanupPolicy(oldDescriptor);
@@ -339,6 +344,13 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     }
 
     private void rebuildRepositories(CentralConfigDescriptor oldDescriptor) {
+        if (globalVirtualRepo != null) {
+            // stop remote repo online monitors
+            for (RemoteRepo remoteRepo : globalVirtualRepo.getRemoteRepositories()) {
+                remoteRepo.cleanupResources();
+            }
+        }
+
         //Create the repository objects from the descriptor
         CentralConfigDescriptor centralConfig = centralConfigService.getDescriptor();
         InternalRepositoryService transactionalMe = getTransactionalMe();
@@ -770,9 +782,32 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
         statusHolder.setStatus("Started exporting search result '" + searchResults.getName() + "'.", log);
 
         File baseDir = baseSettings.getBaseDir();
+        DateFormat formatter = new SimpleDateFormat("yyyyMMdd.HHmmss");
+        String timestamp = formatter.format(baseSettings.getTime());
+        String baseExportName = searchResults.getName() + "-" + timestamp;
+        File tmpExportDir = new File(baseDir, baseExportName + ".tmp");
+        //Make sure the directory does not already exist
+        try {
+            FileUtils.deleteDirectory(tmpExportDir);
+        } catch (IOException e) {
+            statusHolder.setError("Failed to delete old temp export directory: " + tmpExportDir.getAbsolutePath(), e,
+                    log);
+            return statusHolder;
+        }
+
+        statusHolder.setStatus("Creating temp export directory: " + tmpExportDir.getAbsolutePath(), log);
+        try {
+            FileUtils.forceMkdir(tmpExportDir);
+        } catch (IOException e) {
+            statusHolder.setError("Failed to create temp export dir: " + tmpExportDir.getAbsolutePath(), e, log);
+            return statusHolder;
+        }
+        statusHolder.setStatus("Using temp export directory: '" + tmpExportDir.getAbsolutePath() + "'.", log);
+
+
         for (org.artifactory.fs.FileInfo searchResult : searchResults.getResults()) {
             RepoPath repoPath = searchResult.getRepoPath();
-            ExportSettings settings = new ExportSettingsImpl(baseDir, baseSettings);
+            ExportSettings settings = new ExportSettingsImpl(tmpExportDir, baseSettings);
             StoringRepo storingRepo = storingRepositoryByKey(repoPath.getRepoKey());
             JcrFile jcrFile = storingRepo.getJcrFile(repoPath);
             jcrFile.exportTo(settings);
@@ -781,11 +816,11 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
             try {
                 statusHolder.setStatus("Archiving exported search result '" + searchResults.getName() + "'.", log);
                 String tempDir = System.getProperty("java.io.tmpdir");
-                File tempArchive = new File(tempDir, baseDir.getName() + ".zip");
+                File tempArchive = new File(tempDir, baseExportName + ".zip");
                 // Create the archive
-                ZipUtils.archive(baseDir, tempArchive, true);
+                ZipUtils.archive(tmpExportDir, tempArchive, true);
                 //Delete the exploded directory
-                FileUtils.deleteDirectory(baseDir);
+                FileUtils.deleteDirectory(tmpExportDir);
                 //Copy the zip back into the deleted directory
                 FileUtils.copyFile(tempArchive, new File(baseDir, tempArchive.getName()));
                 //Delete the temporary zip
@@ -793,9 +828,31 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
             } catch (IOException e) {
                 statusHolder.setError("Unable to create zip archive", -1, e, log);
             }
+        } else {
+            moveTmpToExportDir(statusHolder, baseExportName, baseDir, tmpExportDir);
         }
+
         statusHolder.setStatus("Finished exporting search result '" + searchResults.getName() + "'.", log);
         return statusHolder;
+    }
+
+    private void moveTmpToExportDir(MutableStatusHolder status, String finalExportDirName, File baseDir,
+            File tmpExportDir) {
+        //Delete any exiting final export dir
+        File exportDir = new File(baseDir, finalExportDirName);
+        try {
+            FileUtils.deleteDirectory(exportDir);
+        } catch (IOException e) {
+            log.warn("Failed to delete existing final export directory.", e);
+        }
+        //Switch the directories
+        try {
+            FileUtils.moveDirectory(tmpExportDir, exportDir);
+        } catch (IOException e) {
+            log.error("Failed to move '{}' to '{}': {}", new Object[]{tmpExportDir, exportDir, e.getMessage()});
+        } finally {
+            status.setOutputFile(exportDir);
+        }
     }
 
     @Override
@@ -1607,6 +1664,32 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     }
 
     @Override
+    public boolean isRemoteAssumedOffline(@Nonnull String remoteRepoKey) {
+        RemoteRepo remoteRepo = remoteRepositoryByKey(remoteRepoKey);
+        if (remoteRepo == null) {
+            return false;
+        }
+        return remoteRepo.isAssumedOffline();
+    }
+
+    @Override
+    public long getRemoteNextOnlineCheck(String remoteRepoKey) {
+        RemoteRepo remoteRepo = remoteRepositoryByKey(remoteRepoKey);
+        if (remoteRepo == null) {
+            return 0;
+        }
+        return remoteRepo.getNextOnlineCheckMillis();
+    }
+
+    @Override
+    public void resetAssumedOffline(String remoteRepoKey) {
+        RemoteRepo remoteRepo = remoteRepositoryByKey(remoteRepoKey);
+        if (remoteRepo != null) {
+            remoteRepo.resetAssumedOffline();
+        }
+    }
+
+    @Override
     public void assertValidDeployPath(LocalRepo repo, String path) throws RepoRejectException {
         BasicStatusHolder status = repo.assertValidPath(path, false);
 
@@ -1679,15 +1762,20 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     public ResourceStreamHandle getResourceStreamHandle(InternalRequestContext requestContext, Repo repo,
             RepoResource res) throws IOException, RepoRejectException, RepositoryException {
         if (res instanceof ResolvedResource) {
+            RequestTraceLogger.log("The requested resource is already resolved - using a string resource handle");
             // resource already contains the content - just extract it and return a string resource handle
             String content = ((ResolvedResource) res).getContent();
             return new StringResourceStreamHandle(content);
         } else {
+            RequestTraceLogger.log("The requested resource isn't pre-resolved");
             RepoPath repoPath = res.getRepoPath();
             if (repo.isReal()) {
+                RequestTraceLogger.log("Target repository isn't virtual - verifying that downloading is allowed");
                 //Permissions apply only to real repos
                 StatusHolder holder = ((RealRepo) repo).checkDownloadIsAllowed(repoPath);
                 if (holder.isError()) {
+                    RequestTraceLogger.log("Download isn't allowed - received status {} and message '%s'",
+                            holder.getStatusCode(), holder.getStatusMsg());
                     throw new RepoRejectException(holder.getStatusMsg(), holder.getStatusCode());
                 }
             }
@@ -2357,7 +2445,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
 
         HttpClient client = new HttpClientConfigurator()
                 .soTimeout(15000)
-                .connectionTimeout(1500)
+                .connectionTimeout(15000)
                 .retry(0, false)
                 .proxy(proxy).getClient();
 

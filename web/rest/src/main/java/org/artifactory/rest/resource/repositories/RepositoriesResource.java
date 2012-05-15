@@ -230,7 +230,9 @@ public class RepositoriesResource {
             RepoDetailsType type) {
         for (RepoDescriptor repoToAdd : reposToAdd) {
             String key = repoToAdd.getKey();
-            detailsList.add(new RepoDetails(key, repoToAdd.getDescription(), type, getRepoUrl(key)));
+            if (authorizationService.userHasPermissionsOnRepositoryRoot(key)) {
+                detailsList.add(new RepoDetails(key, repoToAdd.getDescription(), type, getRepoUrl(key)));
+            }
         }
     }
 
@@ -244,14 +246,15 @@ public class RepositoriesResource {
 
         for (RemoteRepoDescriptor remoteRepo : remoteRepos) {
             String key = remoteRepo.getKey();
+            if (authorizationService.userHasPermissionsOnRepositoryRoot(key)) {
+                String configUrl = null;
+                if (remoteRepo.isShareConfiguration()) {
+                    configUrl = getRepoConfigUrl(key);
+                }
 
-            String configUrl = null;
-            if (remoteRepo.isShareConfiguration()) {
-                configUrl = getRepoConfigUrl(key);
+                detailsList.add(new RepoDetails(key, remoteRepo.getDescription(), REMOTE, remoteRepo.getUrl(),
+                        configUrl));
             }
-
-            detailsList.add(new RepoDetails(key, remoteRepo.getDescription(), REMOTE, remoteRepo.getUrl(),
-                    configUrl));
         }
     }
 

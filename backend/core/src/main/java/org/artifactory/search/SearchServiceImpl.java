@@ -116,7 +116,6 @@ import java.util.concurrent.TimeoutException;
 @Service
 @Reloadable(beanClass = InternalSearchService.class, initAfter = {InternalRepositoryService.class})
 public class SearchServiceImpl implements InternalSearchService {
-
     private static final Logger log = LoggerFactory.getLogger(SearchServiceImpl.class);
 
     @Autowired
@@ -514,7 +513,11 @@ public class SearchServiceImpl implements InternalSearchService {
     @Override
     public void index(List<RepoPath> archiveRepoPaths) {
         for (RepoPath repoPath : archiveRepoPaths) {
-            getAdvisedMe().index(repoPath);
+            try {
+                getAdvisedMe().index(repoPath);
+            } catch (Exception e) {
+                log.error("Exception indexing "+repoPath, e);
+            }
         }
     }
 
@@ -541,7 +544,11 @@ public class SearchServiceImpl implements InternalSearchService {
 
     @Override
     public void asyncIndex(RepoPath repoPath) {
-        index(repoPath);
+        try {
+            getAdvisedMe().index(repoPath);
+        } catch (Exception e) {
+            log.error("Exception indexing "+repoPath, e);
+        }
     }
 
     /**

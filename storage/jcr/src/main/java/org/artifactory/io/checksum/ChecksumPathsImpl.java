@@ -41,7 +41,6 @@ import org.apache.jackrabbit.core.value.InternalValue;
 import org.apache.jackrabbit.spi.Name;
 import org.artifactory.api.storage.GarbageCollectorInfo;
 import org.artifactory.common.ArtifactoryHome;
-import org.artifactory.common.ConstantValues;
 import org.artifactory.descriptor.config.CentralConfigDescriptor;
 import org.artifactory.jcr.JcrService;
 import org.artifactory.jcr.JcrSession;
@@ -129,14 +128,7 @@ public class ChecksumPathsImpl implements JcrChecksumPaths {
             initQueries(dataStore);
             connHelper = dataStore.getConnectionHelper();
             createTable = !connHelper.tableExists(tableName);
-            //For v1 - drop the table is exist and leave
-            if (ConstantValues.gcUseV1.getBoolean()) {
-                if (!createTable) {
-                    log.info("Using legacy garbage collector");
-                    dropTable();
-                }
-                return;
-            }
+
             //If started from a v1 version drop and recreate the table to cover for a failed conversion
             CompoundVersionDetails originalVersionDetails = ArtifactoryHome.get().getOriginalVersionDetails();
             if (!createTable && originalVersionDetails != null &&
@@ -421,6 +413,7 @@ public class ChecksumPathsImpl implements JcrChecksumPaths {
 
     @Override
     public ImmutableCollection<String> getFileOrPathsLike(List<String> fileExpressions, List<String> pathExpressions) {
+        log.debug("Executing paths search {}:{}", fileExpressions, pathExpressions);
         ResultSet rs = null;
         StringBuilder likeSectionBuilder = new StringBuilder();
 
@@ -437,6 +430,7 @@ public class ChecksumPathsImpl implements JcrChecksumPaths {
             while (rs.next()) {
                 resultPaths.add(rs.getString(1));
             }
+            log.debug("Finished paths search {}:{}", fileExpressions, pathExpressions);
             return ImmutableList.copyOf(resultPaths);
         } catch (Exception e) {
             throw new RuntimeException("Could not select items (file likes =" + fileExpressions + ", path likes=" +
@@ -730,7 +724,9 @@ public class ChecksumPathsImpl implements JcrChecksumPaths {
                         "(SELECT MAX(TS) FROM ${tableName} TGT WHERE TGT.BINNODE=SRC.BINNODE)");
         SQL_RETRIEVE_ALL_CSPATHS = getProperty(dbprops, "retrievAllCsPaths",
                 "SELECT CHECKSUM, PATH, BSIZE, BINNODE, TS FROM ${tableName}");
-        SQL_RETRIEVE_PATHS = getProperty(dbprops, "retrievePaths", "SELECT PATH FROM ${tableName} SRC WHERE %s");
+        SQL_RETRIEVE_PATHS = getProperty(dbprops, "retrievePaths", "SELECT PATH FROM ${tableName} SRC " +
+                "WHERE %s AND SRC.TS IN " +
+                "(SELECT MAX(TS) FROM ${tableName} TGT WHERE TGT.BINNODE=SRC.BINNODE)");
         SQL_RETRIEVE_MAX_TS =
                 getProperty(dbprops, "retrieveMaxCreated", "SELECT MAX(TS) FROM ${tableName}");
 

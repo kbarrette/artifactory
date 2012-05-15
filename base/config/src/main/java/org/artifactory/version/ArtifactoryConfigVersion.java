@@ -46,6 +46,9 @@ import org.artifactory.version.converter.v147.UnusedArtifactCleanupSwitchConvert
 import org.artifactory.version.converter.v149.ReplicationElementNameConverter;
 import org.artifactory.version.converter.v150.GcSystemPropertyConverter;
 import org.artifactory.version.converter.v151.IndexerCronExpPropertyConverter;
+import org.artifactory.version.converter.v152.ArchiveBrowsingConverter;
+import org.artifactory.version.converter.v152.AssumedOfflineConverter;
+import org.artifactory.version.converter.v152.CleanupConfigConverter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -163,6 +166,15 @@ public enum ArtifactoryConfigVersion implements SubConfigElementVersion {
     v1412("http://artifactory.jfrog.org/xsd/1.4.12",
             "http://www.jfrog.org/xsd/artifactory-v1_4_12.xsd",
             ArtifactoryVersion.v251,
+            ArtifactoryVersion.v2511),
+    v1413("http://artifactory.jfrog.org/xsd/1.4.13",
+            "http://www.jfrog.org/xsd/artifactory-v1_4_13.xsd",
+            ArtifactoryVersion.v252,
+            ArtifactoryVersion.v252, new CleanupConfigConverter(), new AssumedOfflineConverter(),
+            new ArchiveBrowsingConverter()),
+    v1414("http://artifactory.jfrog.org/xsd/1.4.14",
+            "http://www.jfrog.org/xsd/artifactory-v1_4_14.xsd",
+            ArtifactoryVersion.v260,
             ArtifactoryVersion.getCurrent());
 
     private final String xsdUri;

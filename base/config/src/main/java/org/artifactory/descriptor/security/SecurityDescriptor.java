@@ -37,7 +37,8 @@ import java.util.List;
  * @author Yossi Shaul
  */
 @XmlType(name = "SecurityType", propOrder = {"anonAccessEnabled", "hideUnauthorizedResources", "passwordSettings",
-        "ldapSettings", "ldapGroupSettings", "httpSsoSettings", "crowdSettings"}, namespace = Descriptor.NS)
+        "ldapSettings", "ldapGroupSettings", "httpSsoSettings", "crowdSettings"},
+        namespace = Descriptor.NS)
 public class SecurityDescriptor implements Descriptor {
 
     @XmlElement(defaultValue = "true")
