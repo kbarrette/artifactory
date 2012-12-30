@@ -94,6 +94,8 @@ public class DeployFromZipPanel extends TitledPanel implements UploadListener {
         deployForm.add(targetRepo);
 
         deployForm.add(new HelpBubble("deployHelp", getDeployHelp()));
+        deployForm.add(new HelpBubble("supportedArchiveExtensions.help",
+                "The following archive extensions are supported: zip,tar,tar.gz,tgz"));
     }
 
     /**
@@ -135,7 +137,7 @@ public class DeployFromZipPanel extends TitledPanel implements UploadListener {
         File uploadedFile = deployForm.getUploadedFile();
         MultiStatusHolder statusHolder = new MultiStatusHolder();
         try {
-            deployService.deployBundle(uploadedFile, targetRepo, statusHolder);
+            deployService.deployBundle(uploadedFile, targetRepo, statusHolder, false);
             List<StatusEntry> errors = statusHolder.getErrors();
             List<StatusEntry> warnings = statusHolder.getWarnings();
 
@@ -148,10 +150,10 @@ public class DeployFromZipPanel extends TitledPanel implements UploadListener {
             }
 
             if (!errors.isEmpty()) {
-                error("There were " + errors.size() + " errors during import. Please review the " + logs +
+                error("There were " + errors.size() + " errors during deployment. Please review the " + logs +
                         " for more details.");
             } else if (!warnings.isEmpty()) {
-                warn("There were " + warnings.size() + " warnings during import. Please review the " + logs +
+                warn("There were " + warnings.size() + " warnings during deployment. Please review the " + logs +
                         " for more details.");
             } else {
                 info(statusHolder.getStatusMsg());

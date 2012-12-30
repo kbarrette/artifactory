@@ -65,6 +65,12 @@ public class NuGetResourceTest {
         EasyMock.expect(restAddonMock.handleNuGetPackagesRequest(EasyMock.isA(HttpServletRequest.class),
                 EasyMock.eq("repoKey"))).andReturn(Response.ok("DAMN STRAIGHT!").build());
 
+        EasyMock.expect(restAddonMock.handleFindPackagesByIdRequest(EasyMock.isA(HttpServletRequest.class),
+                EasyMock.eq("repoKey"))).andReturn(Response.ok("DAMN STRAIGHT!").build());
+
+        EasyMock.expect(restAddonMock.handleGetUpdatesRequest(EasyMock.isA(HttpServletRequest.class),
+                EasyMock.eq("repoKey"), EasyMock.eq("actionParam"))).andReturn(Response.ok("DAMN STRAIGHT!").build());
+
         EasyMock.expect(restAddonMock.handleNuGetDownloadRequest(EasyMock.isA(HttpServletResponse.class),
                 EasyMock.eq("repoKey"), EasyMock.eq("packageId"), EasyMock.eq("packageVersion")))
                 .andReturn(Response.ok("DAMN STRAIGHT!").build());
@@ -120,6 +126,20 @@ public class NuGetResourceTest {
     }
 
     @Test
+    public void testFindPackagesByIdQueryMethodCallsAddon() throws Exception {
+        NuGetResource nuGetResource = getNuGetResourceInstance();
+        Response response = nuGetResource.findPackagesById("repoKey");
+        verifyResponse(response);
+    }
+
+    @Test
+    public void testGetUpdatesQueryMethodCallsAddon() throws Exception {
+        NuGetResource nuGetResource = getNuGetResourceInstance();
+        Response response = nuGetResource.getUpdates("repoKey", "actionParam");
+        verifyResponse(response);
+    }
+
+    @Test
     public void testDownloadMethodCallsAddon() throws Exception {
         NuGetResource nuGetResource = getNuGetResourceInstance();
         Response response = nuGetResource.download("repoKey", "packageId", "packageVersion");
@@ -168,6 +188,22 @@ public class NuGetResourceTest {
         Method restMethod = NuGetResource.class.getDeclaredMethod("getPackages", String.class);
         Path pathAnnotation = restMethod.getAnnotation(Path.class);
         assertEquals(pathAnnotation.value(), "{repoKey: [^/]+}/Packages()", "Unexpected resource path pattern.");
+    }
+
+    @Test
+    public void tesFindPackagesByIdMethodPathAnnotation() throws Exception {
+        Method restMethod = NuGetResource.class.getDeclaredMethod("findPackagesById", String.class);
+        Path pathAnnotation = restMethod.getAnnotation(Path.class);
+        assertEquals(pathAnnotation.value(), "{repoKey: [^/]+}/FindPackagesById()",
+                "Unexpected resource path pattern.");
+    }
+
+    @Test
+    public void testGetUpdatesMethodPathAnnotation() throws Exception {
+        Method restMethod = NuGetResource.class.getDeclaredMethod("getUpdates", String.class, String.class);
+        Path pathAnnotation = restMethod.getAnnotation(Path.class);
+        assertEquals(pathAnnotation.value(), "{repoKey: [^/]+}/GetUpdates(){separator: [/]*}{actionParam: .*}",
+                "Unexpected resource path pattern.");
     }
 
     @Test

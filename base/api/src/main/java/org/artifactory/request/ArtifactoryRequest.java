@@ -32,11 +32,20 @@ public interface ArtifactoryRequest extends Request {
 
     String CHECKSUM_MD5 = "X-Checksum-Md5";
 
+    String FILE_NAME = "X-Artifactory-Filename";
+
     /**
      * An header to trigger checksum deploy (when the value is true). Request must also include
      * {@link org.artifactory.request.ArtifactoryRequest#CHECKSUM_SHA1}.
      */
     String CHECKSUM_DEPLOY = "X-Checksum-Deploy";
+
+    /**
+     * Header to trigger bundle archive deployment (supports zip/tar/tar.gz)
+     */
+    String EXPLODE_ARCHIVE = "X-Explode-Archive";
+
+    String RESULT_DETAIL = "X-Result-Detail";
 
     String PARAM_SKIP_JAR_INDEXING = "artifactory.skipJarIndexing";
 
@@ -46,6 +55,8 @@ public interface ArtifactoryRequest extends Request {
             "artifactory.searchForExistingResourceOnRemoteRequest";
 
     String PARAM_ALTERNATIVE_REMOTE_DOWNLOAD_URL = "artifactory.alternativeRemoteDownloadUrl";
+
+    String PARAM_REPLICATION_DOWNLOAD_REQUESET = "artifactory.replicationDownloadRequest";
 
     /**
      * The path prefix name for list browsing.

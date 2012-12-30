@@ -20,7 +20,7 @@
     <groupId>org.artifactory</groupId>
     <artifactId>artifactory-parent</artifactId>
     <packaging>pom</packaging>
-    <version>2.6.1</version>
+    <version>2.6.6</version>
     <name>Artifactory Parent</name>
     <url>http://artifactory.jfrog.org/</url>
 
@@ -49,7 +49,7 @@
         <sourceforgeName>artifactory</sourceforgeName>
         <spring.version>3.1.1.RELEASE</spring.version>
         <spring.security.version>3.1.0.RELEASE</spring.security.version>
-        <build.info.version>2.0.10</build.info.version>
+        <build.info.version>2.0.13</build.info.version>
         <wicket.version>1.5.3</wicket.version>
         <jetty.version>7.0.2.v20100331</jetty.version>
         <maven.version>2.2.1</maven.version>
@@ -143,90 +143,90 @@
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-config</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
                 <type>test-jar</type>
                 <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-config</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-common</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-capi</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-papi</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-api</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-common-storage</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-jcr-storage</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-traffic</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-log</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-core</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-update</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-rest</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-web-application</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-web-common</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-web-war</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
                 <type>war</type>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-web-green-skin</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
             <dependency>
                 <groupId>org.artifactory</groupId>
@@ -243,7 +243,7 @@
             <dependency>
                 <groupId>org.artifactory</groupId>
                 <artifactId>artifactory-constants</artifactId>
-                <version>2.6.1</version>
+                <version>2.6.6</version>
             </dependency>
 
             <dependency>
@@ -290,14 +290,14 @@
             <dependency>
                 <groupId>org.codehaus.groovy</groupId>
                 <artifactId>groovy</artifactId>
-                <version>1.8.4</version>
+                <version>1.8.8</version>
                 <optional>true</optional>
             </dependency>
 
             <dependency>
                 <groupId>org.codehaus.groovy</groupId>
                 <artifactId>groovy-all</artifactId>
-                <version>1.8.4</version>
+                <version>1.8.8</version>
                 <scope>test</scope>
             </dependency>
 
@@ -414,6 +414,12 @@
             </dependency>
 
             <dependency>
+                <groupId>commons-dbcp</groupId>
+                <artifactId>commons-dbcp</artifactId>
+                <version>1.4</version>
+            </dependency>
+
+            <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
@@ -442,6 +448,18 @@
                 <artifactId>log4j-over-slf4j</artifactId>
                 <version>${slf4j.version}</version>
                 <scope>compile</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-core</artifactId>
+                <version>0.9.18</version>
+            </dependency>
+
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>0.9.18</version>
             </dependency>
 
             <dependency>
@@ -575,7 +593,7 @@
             <dependency>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>1.2</version>
+                <version>1.3.1</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.apache.maven</groupId>
@@ -642,14 +660,14 @@
             <dependency>
                 <groupId>org.apache.derby</groupId>
                 <artifactId>derby</artifactId>
-                <version>10.8.2.2</version>
+                <version>10.9.1.0</version>
                 <scope>runtime</scope>
             </dependency>
 
             <dependency>
                 <groupId>org.apache.jackrabbit</groupId>
                 <artifactId>jackrabbit-core-jfrog</artifactId>
-                <version>2.2.8c</version>
+                <version>2.2.8e</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.apache.lucene</groupId>
@@ -1211,13 +1229,38 @@
             </dependency>
 
             <dependency>
-                <groupId>org.redline-rpm</groupId>
-                <artifactId>redline</artifactId>
-                <version>1.1.9</version>
+                <groupId>org.jfrog.metadata</groupId>
+                <artifactId>rpm-indexer</artifactId>
+                <classifier>pro</classifier>
+                <version>1.2</version>
                 <exclusions>
                     <exclusion>
-                        <groupId>org.apache.ant</groupId>
-                        <artifactId>ant</artifactId>
+                        <groupId>org.jfrog.metadata</groupId>
+                        <artifactId>rpm-extractor</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.jfrog.metadata</groupId>
+                        <artifactId>rpm-writer</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jfrog.metadata</groupId>
+                <artifactId>rpm-extractor</artifactId>
+                <classifier>pro</classifier>
+                <version>1.2</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jfrog.metadata</groupId>
+                <artifactId>rpm-writer</artifactId>
+                <classifier>pro</classifier>
+                <version>1.2</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.jfrog.metadata</groupId>
+                        <artifactId>rpm-extractor</artifactId>
                     </exclusion>
                 </exclusions>
             </dependency>
@@ -1227,6 +1270,59 @@
                 <artifactId>bcprov-jdk16</artifactId>
                 <version>1.46</version>
             </dependency>
+
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>1.4.1</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.tukaani</groupId>
+                        <artifactId>xz</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>org.opensaml</groupId>
+                <artifactId>opensaml</artifactId>
+                <version>2.5.1</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>xerces</groupId>
+                        <artifactId>xercesImpl</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xerces</groupId>
+                        <artifactId>xml-apis</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xml-apis</groupId>
+                        <artifactId>xml-apis</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.bouncycastle</groupId>
+                        <artifactId>bcprov-jdk15</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>net.jcip</groupId>
+                        <artifactId>jcip-annotations</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xml-resolver</groupId>
+                        <artifactId>xml-resolver</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xalan</groupId>
+                        <artifactId>serializer</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xalan</groupId>
+                        <artifactId>xalan</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -1265,7 +1361,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>1.0</version>
+                <version>1.1</version>
                 <executions>
                     <execution>
                         <goals>
@@ -1298,10 +1394,13 @@
                                         <exclude>com.google.collections:google-collections</exclude>
                                         <!--we use log4j over slf4j -->
                                         <exclude>log4j:log4j</exclude>
+                                        <!-- we use the jdk6 version -->
+                                        <exclude>org.bouncycastle:bcprov-jdk15</exclude>
+
                                     </excludes>
                                 </bannedDependencies>
                                 <requireJavaVersion>
-                                    <version>[1.5.0, 1.6.0),[1.6.0-4,)</version>
+                                    <version>[1.6.0-4,)</version>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
                                     <version>2.0.9</version>
@@ -1343,12 +1442,12 @@
                         <dependency>
                             <groupId>org.codehaus.groovy</groupId>
                             <artifactId>groovy-eclipse-compiler</artifactId>
-                            <version>2.6.0-01</version>
+                            <version>2.7.0-01</version>
                         </dependency>
                         <dependency>
                             <groupId>org.codehaus.groovy</groupId>
                             <artifactId>groovy-eclipse-batch</artifactId>
-                            <version>1.8.4-01</version>
+                            <version>1.8.6-01</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -1380,7 +1479,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-assembly-plugin</artifactId>
-                    <version>2.2.2</version>
+                    <version>2.4</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -1390,7 +1489,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
-                    <version>1.0.1</version>
+                    <version>1.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -1468,7 +1567,7 @@
                 <plugin>
                     <groupId>org.codehaus.sonar</groupId>
                     <artifactId>sonar-maven3-plugin</artifactId>
-                    <version>2.12</version>
+                    <version>3.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -1545,7 +1644,7 @@
             <id>artifactory</id>
             <activation>
                 <file>
-                    <missing>.svn</missing>
+                    <exists>.svn</exists>
                 </file>
             </activation>
             <repositories>

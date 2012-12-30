@@ -18,8 +18,8 @@
   -->
 
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" version="1.0"
-           targetNamespace="http://artifactory.jfrog.org/xsd/1.4.14"
-           xmlns="http://artifactory.jfrog.org/xsd/1.4.14"
+           targetNamespace="http://artifactory.jfrog.org/xsd/1.4.18"
+           xmlns="http://artifactory.jfrog.org/xsd/1.4.18"
            elementFormDefault="qualified">
 
     <xs:element name="config" type="CentralConfigType"/>
@@ -198,6 +198,7 @@
             </xs:element>
             <xs:element name="gcConfig" type="GcConfigType" minOccurs="1"/>
             <xs:element name="cleanupConfig" type="CleanupConfigType" minOccurs="1"/>
+            <xs:element name="quotaConfig" type="QuotaConfigType" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>
 
@@ -237,9 +238,9 @@
                                 The options are:
                                 (1) Verify against client checksums (default) - Until a client has sent a valid checksum
                                 for a deployed artifact that matches the server's locally calculated checksum, the
-                                artifact will not be available and will return 404 (not found). If the client has sent a
-                                checksum that conflicts with the one calculated on the server a 409 (conflict) will be
-                                returned until a valid checksum is deployed.
+                                artifact's checksum will not be available and will return 404 (not found).
+                                If the client has sent a checksum that conflicts with the one calculated on the server a
+                                409 (conflict) will be returned until a valid checksum is deployed.
                                 (2) Trust server generated checksums - Do not verify against checksums sent by clients
                                 and trust the ones store server's locally calculated checksums. An uploaded artifact
                                 will be available for consumption immediately, but integrity might be compromised.
@@ -267,6 +268,15 @@
                                 hierarchies.
                                 For example, if your RPMs are stored under 'fedora/linux/$releasever/$basearch',
                                 specify a depth of 4.
+                            </xs:documentation>
+                        </xs:annotation>
+                    </xs:element>
+                    <xs:element name="yumGroupFileNames" type="xs:string" minOccurs="0">
+                        <xs:annotation>
+                            <xs:documentation source="description">
+                                A comma-separated list of xml file names that contain YUM group component definitions.
+                                Artifactory will include the group definitions as part of the calculated YUM metadata,
+                                as well as automatically generate a gzipped version of the group files if needed.
                             </xs:documentation>
                         </xs:annotation>
                     </xs:element>
@@ -468,6 +478,16 @@
                             </xs:documentation>
                         </xs:annotation>
                     </xs:element>
+                    <xs:element name="queryParams" type="xs:string" minOccurs="0">
+                        <xs:annotation>
+                            <xs:documentation source="description">
+                                <![CDATA[
+                                Custom HTTP query parameters that will be automatically included in all remote resource requests.
+                                For example: param1=val1&amp;param2=val2&amp;param3=val3
+                                ]]>
+                            </xs:documentation>
+                        </xs:annotation>
+                    </xs:element>
                 </xs:sequence>
             </xs:extension>
         </xs:complexContent>
@@ -648,6 +668,14 @@
                         <xs:annotation>
                             <xs:documentation source="description">
                                 Proxy and cache NuGet libraries from the remote repository.
+                            </xs:documentation>
+                        </xs:annotation>
+                    </xs:element>
+                    <xs:element name="p2OriginalUrl" type="xs:string" minOccurs="0">
+                        <xs:annotation>
+                            <xs:documentation source="description">
+                                The URL for the original P2 repository. Currently only HTTP/S URLs are
+                                supported.
                             </xs:documentation>
                         </xs:annotation>
                     </xs:element>
@@ -1167,6 +1195,15 @@
                     </xs:documentation>
                 </xs:annotation>
             </xs:element>
+            <xs:element name="samlSettings" type="SamlSettingsType" minOccurs="0" maxOccurs="1">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                        Security settings specific to SAML.
+                        ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
         </xs:sequence>
     </xs:complexType>
 
@@ -1284,7 +1321,7 @@ If using mod_jk, make sure to use the "JkEnvVar REMOTE_USER" directive in Apache
                 <xs:annotation>
                     <xs:documentation source="description">
                         <![CDATA[
-                                The time window in which the session does not need to be revalidated.
+                                The time window, in minutes, in which the session does not need to be revalidated.
                                 ]]>
                     </xs:documentation>
                 </xs:annotation>
@@ -1298,7 +1335,7 @@ If using mod_jk, make sure to use the "JkEnvVar REMOTE_USER" directive in Apache
                     </xs:documentation>
                 </xs:annotation>
             </xs:element>
-            <xs:element name="noAutoUserCreation" type="xs:boolean" minOccurs="0" default="false">
+            <xs:element name="noAutoUserCreation" type="xs:boolean" minOccurs="0" default="true">
                 <xs:annotation>
                     <xs:documentation source="description">
                         <![CDATA[
@@ -1309,6 +1346,80 @@ If using mod_jk, make sure to use the "JkEnvVar REMOTE_USER" directive in Apache
                         Without auto user creation, you will need to manually create the user inside Artifactory in
                         order to manage user permissions that are not attached to his default groups.
                         ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="customCookieTokenKey" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                Specify the SSO custom cookie name. Out of the box Crowd uses the 'crowd.token_key' cookie name for all Crowd-connected applications.
+                                You can override the default value with your own cookie name. This is useful in environments with multiple Crowd servers.
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="SamlSettingsType">
+        <xs:sequence>
+            <xs:element name="enableIntegration" type="xs:boolean" minOccurs="0" default="false">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                Enable security integration with SAML.
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="loginUrl" type="xs:string" minOccurs="0" maxOccurs="1">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                The identity provider login URL (when the user tries to login, the service provider redirects to this URL)
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="logoutUrl" type="xs:string" minOccurs="0" maxOccurs="1">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                The identity provider logout URL (when the user tries to logout, the service provider redirects to this URL)
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="certificate" type="xs:string" minOccurs="0" maxOccurs="1">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                The certificate for SAML Authentication. NOTE: The certificate must contain the public key in order to allow Artifactory to verify sign-in requests
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="serviceProviderName" type="xs:string" minOccurs="0" maxOccurs="1">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                SAML service provider name: this is the Artifactory name in the SAML federation
+                                ]]>
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="noAutoUserCreation" type="xs:boolean" minOccurs="0" default="true">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        <![CDATA[
+                                When automatic user creation is off, authenticated users will not be automatically created
+                        inside Artifactory. Instead, for every request from a SAML user, the user will be temporarily
+                        associated with default groups (if such groups are defined), and the permissions for these
+                        groups will apply.
+                        Without auto user creation, you will need to manually create the user inside Artifactory in
+                        order to manage user permissions that are not attached to his default groups.
+                                ]]>
                     </xs:documentation>
                 </xs:annotation>
             </xs:element>
@@ -2021,6 +2132,13 @@ If using mod_jk, make sure to use the "JkEnvVar REMOTE_USER" directive in Apache
                             </xs:documentation>
                         </xs:annotation>
                     </xs:element>
+                    <xs:element name="enableEventReplication" type="xs:boolean" minOccurs="0">
+                        <xs:annotation>
+                            <xs:documentation source="description">
+                                Replicate additions and modifications as they occur.
+                            </xs:documentation>
+                        </xs:annotation>
+                    </xs:element>
                 </xs:sequence>
             </xs:extension>
         </xs:complexContent>
@@ -2052,6 +2170,47 @@ If using mod_jk, make sure to use the "JkEnvVar REMOTE_USER" directive in Apache
                 <xs:annotation>
                     <xs:documentation source="description">
                         Artifacts cleanup cron exp
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="QuotaConfigType">
+        <xs:annotation>
+            <xs:documentation source="description">
+                Quota management configuration
+            </xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="enabled" type="xs:boolean" default="false" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        Enable control over the size of storage space used for binaries to avoid running out of disk
+                        space.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="diskSpaceLimitPercentage" type="xs:int" default="0" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        The maximum allowed disk usage, in percentage, of the partition containing the binaries folder.
+                        Once this limit has been reached deployments will be rejected with a 413 error (request entity
+                        too large) and an
+                        error message will be displayed in the UI (visible for admin users only).
+                        With a filesystem storage the partition checked is one containing the
+                        '$ARTIFACTORY_HOME/data/filestore' directory.
+                        With a database blob storage the partition checked is one containing the
+                        '$ARTIFACTORY_HOME/data/cache' directory.
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element name="diskSpaceWarningPercentage" type="xs:int" default="0" minOccurs="0">
+                <xs:annotation>
+                    <xs:documentation source="description">
+                        The maximum warning-level disk usage, in percentage, of the partition containing the binaries
+                        folder.
+                        Once this limit has been reached a warning will be logged and a
+                        warning message will be displayed in the UI (visible for admin users only).
                     </xs:documentation>
                 </xs:annotation>
             </xs:element>

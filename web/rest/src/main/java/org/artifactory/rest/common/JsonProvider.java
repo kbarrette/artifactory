@@ -87,7 +87,8 @@ import javax.ws.rs.ext.Provider;
         SecurityRestConstants.MT_USERS,
         SecurityRestConstants.MT_PERMISSION_TARGETS,
         ReplicationRestConstants.MT_REPLICATION_REQUEST,
-        BuildRestConstants.MT_BUILD_PATTERN_ARTIFACTS_REQUEST
+        BuildRestConstants.MT_BUILD_PATTERN_ARTIFACTS_REQUEST,
+        BuildRestConstants.MT_BUILD_ARTIFACTS_REQUEST
 })
 @Produces({
         MediaType.APPLICATION_JSON,
@@ -95,6 +96,7 @@ import javax.ws.rs.ext.Provider;
         BuildRestConstants.MT_BUILDS_BY_NAME,
         BuildRestConstants.MT_BUILD,
         BuildRestConstants.MT_BUILD_INFO,
+        BuildRestConstants.MT_BUILDS_DIFF,
         BuildRestConstants.MT_COPY_MOVE_RESULT,
         BuildRestConstants.MT_PROMOTION_RESULT,
         RepositoriesRestConstants.MT_REPOSITORY_DETAILS_LIST,
@@ -136,7 +138,8 @@ import javax.ws.rs.ext.Provider;
         ReplicationRestConstants.MT_REPLICATION_STATUS,
         PluginRestConstants.MT_BUILD_STAGING_STRATEGY,
         BuildRestConstants.MT_BUILD_PATTERN_ARTIFACTS_RESULT,
-        SearchRestConstants.MT_ARTIFACT_VERSIONS_SEARCH_RESULT
+        SearchRestConstants.MT_ARTIFACT_VERSIONS_SEARCH_RESULT,
+        SearchRestConstants.MT_BUILD_ARTIFACTS_SEARCH_RESULT
 })
 public class JsonProvider extends JacksonJsonProvider implements ContextResolver<ObjectMapper> {
 

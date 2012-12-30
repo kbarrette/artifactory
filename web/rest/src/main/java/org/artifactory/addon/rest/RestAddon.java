@@ -30,14 +30,17 @@ import org.artifactory.api.repo.exception.BlackedOutException;
 import org.artifactory.api.rest.artifact.ItemPermissions;
 import org.artifactory.api.rest.artifact.MoveCopyResult;
 import org.artifactory.api.rest.artifact.PromotionResult;
+import org.artifactory.api.rest.build.artifacts.BuildArtifactsRequest;
 import org.artifactory.api.rest.replication.ReplicationRequest;
 import org.artifactory.api.rest.search.result.ArtifactVersionsResult;
 import org.artifactory.api.rest.search.result.LicensesSearchResult;
+import org.artifactory.fs.FileInfo;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.rest.common.list.KeyValueList;
 import org.artifactory.rest.common.list.StringList;
 import org.artifactory.rest.resource.artifact.legacy.DownloadResource;
 import org.artifactory.sapi.common.Lock;
+import org.jfrog.build.api.Build;
 import org.jfrog.build.api.BuildRetention;
 import org.jfrog.build.api.dependency.BuildPatternArtifacts;
 import org.jfrog.build.api.dependency.BuildPatternArtifactsRequest;
@@ -49,6 +52,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.text.ParseException;
@@ -216,11 +220,11 @@ public interface RestAddon extends Addon {
      * Get Repository configuration according to the repository key in conjunction with the media type to enforce a
      * certain type of repository configuration.
      *
-     * @param repoKey    The repokey of the repository.
-     * @param mediaTypes The acceptable media types for this request
+     * @param repoKey   The repokey of the repository.
+     * @param mediaType The acceptable media type for this request
      * @return The response with the configuration embedded in it.
      */
-    Response getRepositoryConfiguration(String repoKey, List<MediaType> mediaTypes);
+    Response getRepositoryConfiguration(String repoKey, MediaType mediaType);
 
     /**
      * Create or replace an existing repository via REST.
@@ -230,17 +234,17 @@ public interface RestAddon extends Addon {
      * @param mediaTypes       The mediatypes of which are applicable. {@link org.artifactory.api.rest.constant.RepositoriesRestConstants}
      * @param position         The position in the map that the newly created repository will be placed
      */
-    Response createOrReplaceRepository(String repoKey, Map repositoryConfig, List<MediaType> mediaTypes, int position);
+    Response createOrReplaceRepository(String repoKey, Map repositoryConfig, MediaType mediaType, int position);
 
     /**
      * Update an existing repository via REST.
      *
      * @param repoKey          The repokey of the repository to be updated.
      * @param repositoryConfig The repository config of what is to be updated.
-     * @param mediaTypes       The acceptable media types for this REST command.
+     * @param mediaType        The acceptable media type for this REST command.
      * @return The response for this command.
      */
-    Response updateRepository(String repoKey, Map repositoryConfig, List<MediaType> mediaTypes);
+    Response updateRepository(String repoKey, Map repositoryConfig, MediaType mediaType);
 
     /**
      * Search for artifacts by their checksums
@@ -344,6 +348,26 @@ public interface RestAddon extends Addon {
     Response handleNuGetPackagesRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey);
 
     /**
+     * Handles NuGet package search by ID requests
+     *
+     * @param request Request
+     * @param repoKey Repo key
+     * @return Response
+     */
+    Response handleFindPackagesByIdRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey);
+
+    /**
+     * Handles NuGet package update search requests
+     *
+     * @param request     Request
+     * @param repoKey     Repo key
+     * @param actionParam Path parameter identifying the action
+     * @return Response
+     */
+    Response handleGetUpdatesRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey,
+            @Nullable String actionParam);
+
+    /**
      * Handles a NuGet package download request
      *
      * @param response       Servlet response
@@ -402,6 +426,34 @@ public interface RestAddon extends Addon {
     @Nullable
     BuildPatternArtifacts getBuildPatternArtifacts(@Nonnull BuildPatternArtifactsRequest buildPatternArtifactsRequest,
             @NotNull String servletContextUrl);
+
+    /**
+     * Returns diff object between two given builds (same build name, different numbers)
+     *
+     * @param firstBuild  The first build to compare, must be newer than the second build
+     * @param secondBuild The second build to compare against
+     * @param request     The request to extract the base uri from
+     */
+    Response getBuildsDiff(Build firstBuild, Build secondBuild, HttpServletRequest request);
+
+    /**
+     * Returns build artifacts map according to the param input regexp patterns.
+     *
+     * @param buildArtifactsRequest A wrapper which contains the necessary parameters
+     * @return A map from {@link FileInfo}s to their target directories relative paths
+     * @see BuildArtifactsRequest
+     */
+    Map<FileInfo, String> getBuildArtifacts(BuildArtifactsRequest buildArtifactsRequest);
+
+    /**
+     * Returns an archive file according to the param archive type (zip/tar/tar.gz/tgz) which contains
+     * all build artifacts according to the given build name and number (can be latest or latest by status).
+     *
+     * @param buildArtifactsRequest A wrapper which contains the necessary parameters
+     * @return The archived file of build artifacts with their hierarchy rules
+     * @see BuildArtifactsRequest
+     */
+    File getBuildArtifactsArchive(BuildArtifactsRequest buildArtifactsRequest) throws IOException;
 
     /**
      * Invokes a user plugin based build promotion action

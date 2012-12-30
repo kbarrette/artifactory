@@ -32,6 +32,6 @@ public class DeployFromZipPage extends AuthenticatedPage {
 
     @Override
     public String getPageName() {
-        return "Zip Deployer";
+        return "Archive Deployer";
     }
 }

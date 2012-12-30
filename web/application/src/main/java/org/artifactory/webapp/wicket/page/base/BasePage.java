@@ -35,10 +35,15 @@ import org.apache.wicket.request.flow.RedirectToUrlException;
 import org.apache.wicket.request.http.WebResponse;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 import org.artifactory.addon.AddonsManager;
+import org.artifactory.addon.AddonsWebManager;
+import org.artifactory.addon.wicket.SamlAddon;
 import org.artifactory.addon.wicket.WebApplicationAddon;
 import org.artifactory.api.config.CentralConfigService;
 import org.artifactory.api.security.AuthorizationService;
+import org.artifactory.api.storage.StorageQuotaInfo;
+import org.artifactory.api.storage.StorageService;
 import org.artifactory.common.wicket.WicketProperty;
+import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
 import org.artifactory.common.wicket.component.modal.HasModalHandler;
 import org.artifactory.common.wicket.component.modal.ModalHandler;
@@ -69,7 +74,10 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
     private AuthorizationService authorizationService;
 
     @SpringBean
-    private AddonsManager addons;
+    private AddonsManager addonsManager;
+
+    @SpringBean
+    private AddonsWebManager addonsWebManager;
 
     private ModalHandler modalHandler;
 
@@ -84,7 +92,7 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
 
     @WicketProperty
     public String getPageTitle() {
-        return addons.addonByType(WebApplicationAddon.class).getPageTitle(this);
+        return addonsManager.addonByType(WebApplicationAddon.class).getPageTitle(this);
     }
 
     protected void init() {
@@ -102,12 +110,13 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
 
         add(new FooterLabel("footer"));
 
-        String license = addons.getFooterMessage(authorizationService.isAdmin());
+        String license = addonsWebManager.getFooterMessage(authorizationService.isAdmin());
         Label licenseLabel = new Label("license", license);
         licenseLabel.setEscapeModelStrings(false);
         add(licenseLabel);
 
         add(new LicenseFooterLabel("licenseFooter"));
+        add(new StorageQuotaLabel("storageQuotaFooter"));
 
         add(new HeaderLogoPanel("logo"));
 
@@ -178,8 +187,8 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
                 //urlBuilder.append("/webapp/search/artifact");
                 if (StringUtils.isNotBlank(query)) {
                     try {
-                        urlBuilder.append("?").append(BaseSearchPage.QUERY_PARAM).append("=").
-                                append(URLEncoder.encode(query, "UTF-8"));
+                        urlBuilder.append("?").append(BaseSearchPage.QUERY_PARAM).append("=").append(
+                                URLEncoder.encode(query, "UTF-8"));
                     } catch (UnsupportedEncodingException e) {
                         log.error(String.format("Unable to append the Quick-Search query '%s'", query), e);
                     }
@@ -192,26 +201,27 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
     }
 
     private void addVersionInfo() {
-        String versionInfo = addons.addonByType(WebApplicationAddon.class).getVersionInfo();
+        String versionInfo = addonsManager.addonByType(WebApplicationAddon.class).getVersionInfo();
         add(new Label("version", versionInfo));
     }
 
     private void addUserInfo() {
-        AbstractLink logoutLink;
-        WebApplicationAddon applicationAddon;
-        AbstractLink profileLink;
+
         // Enable only for signed in users
-        applicationAddon = addons.addonByType(WebApplicationAddon.class);
-        logoutLink = applicationAddon.getLogoutLink("logoutPage");
-        profileLink = applicationAddon.getProfileLink("profilePage");
+        SamlAddon samlAddon = addonsManager.addonByType(SamlAddon.class);
+        AbstractLink logoutLink = samlAddon.getLogoutLink("logoutPage");
         add(logoutLink);
+
         // Enable only if signed in as anonymous
-        add(new LoginLink("loginPage", "Log In"));
+        AbstractLink loginLink = samlAddon.getLoginLink("loginPage");
+        add(loginLink);
 
         // logged in or not logged in
         add(new Label("loggedInLabel", getLoggedInMessage()));
 
         // update profile link
+        WebApplicationAddon applicationAddon = addonsManager.addonByType(WebApplicationAddon.class);
+        AbstractLink profileLink = applicationAddon.getProfileLink("profilePage");
         add(profileLink);
     }
 
@@ -266,6 +276,9 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
         @SpringBean
         private AddonsManager addons;
 
+        @SpringBean
+        private AddonsWebManager addonsWebManager;
+
         public LicenseFooterLabel(String id) {
             super(id, "");
             setOutputMarkupId(true);
@@ -273,7 +286,7 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
 
             String message = null;
             if (authorizationService.isAdmin() || isTrial()) {
-                message = addons.getLicenseFooterMessage();
+                message = addonsWebManager.getLicenseFooterMessage();
                 setDefaultModelObject(message);
             }
             setVisible(StringUtils.isNotEmpty(message));
@@ -289,4 +302,38 @@ public abstract class BasePage extends WebPage implements HasModalHandler {
         }
     }
 
+    private static class StorageQuotaLabel extends Label implements IHeaderContributor {
+        @SpringBean
+        private AuthorizationService authorizationService;
+
+        @SpringBean
+        private StorageService storageService;
+
+        public StorageQuotaLabel(String id) {
+            super(id, "");
+            setOutputMarkupId(true);
+            setEscapeModelStrings(false);
+
+            String message = null;
+            if (authorizationService.isAdmin()) {
+                StorageQuotaInfo info = storageService.getStorageQuotaInfo(0);
+                if (info != null) {
+                    if (info.isLimitReached()) {
+                        add(new CssClass("storage-quota-limit"));
+                        message = info.getErrorMessage();
+                    } else if (info.isWarningLimitReached()) {
+                        add(new CssClass("storage-quota-warning"));
+                        message = info.getWarningMessage();
+                    }
+                    setDefaultModelObject(message);
+                }
+            }
+            setVisible(StringUtils.isNotEmpty(message));
+        }
+
+        @Override
+        public void renderHead(IHeaderResponse response) {
+            response.renderJavaScript("DomUtils.footerHeight = 18;", getMarkupId() + "js");
+        }
+    }
 }

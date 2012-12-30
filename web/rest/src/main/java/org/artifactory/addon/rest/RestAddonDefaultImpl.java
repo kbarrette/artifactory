@@ -26,14 +26,17 @@ import org.artifactory.api.common.MultiStatusHolder;
 import org.artifactory.api.rest.artifact.ItemPermissions;
 import org.artifactory.api.rest.artifact.MoveCopyResult;
 import org.artifactory.api.rest.artifact.PromotionResult;
+import org.artifactory.api.rest.build.artifacts.BuildArtifactsRequest;
 import org.artifactory.api.rest.replication.ReplicationRequest;
 import org.artifactory.api.rest.search.result.ArtifactVersionsResult;
 import org.artifactory.api.rest.search.result.LicensesSearchResult;
+import org.artifactory.fs.FileInfo;
 import org.artifactory.fs.ItemInfo;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.rest.common.list.KeyValueList;
 import org.artifactory.rest.common.list.StringList;
 import org.artifactory.rest.resource.artifact.legacy.DownloadResource;
+import org.jfrog.build.api.Build;
 import org.jfrog.build.api.BuildRetention;
 import org.jfrog.build.api.dependency.BuildPatternArtifacts;
 import org.jfrog.build.api.dependency.BuildPatternArtifactsRequest;
@@ -46,6 +49,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -143,18 +147,18 @@ public class RestAddonDefaultImpl implements RestAddon {
     }
 
     @Override
-    public Response getRepositoryConfiguration(String repoKey, List<MediaType> mediaTypes) {
+    public Response getRepositoryConfiguration(String repoKey, MediaType mediaType) {
         throw new MissingRestAddonException();
     }
 
     @Override
-    public Response createOrReplaceRepository(String repoKey, Map repositoryConfig, List<MediaType> mediaTypes,
+    public Response createOrReplaceRepository(String repoKey, Map repositoryConfig, MediaType mediaType,
             int position) {
         throw new MissingRestAddonException();
     }
 
     @Override
-    public Response updateRepository(String repoKey, Map repositoryConfig, List<MediaType> mediaTypes) {
+    public Response updateRepository(String repoKey, Map repositoryConfig, MediaType mediaType) {
         throw new MissingRestAddonException();
     }
 
@@ -257,6 +261,17 @@ public class RestAddonDefaultImpl implements RestAddon {
     }
 
     @Override
+    public Response handleFindPackagesByIdRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey) {
+        throw new MissingRestAddonException();
+    }
+
+    @Override
+    public Response handleGetUpdatesRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey,
+            @Nullable String actionParam) {
+        throw new MissingRestAddonException();
+    }
+
+    @Override
     public Response handleNuGetDownloadRequest(@Nonnull HttpServletResponse response, @Nonnull String repoKey,
             @Nonnull String packageId, @Nonnull String packageVersion) {
         throw new MissingRestAddonException();
@@ -280,6 +295,21 @@ public class RestAddonDefaultImpl implements RestAddon {
     @Override
     public BuildPatternArtifacts getBuildPatternArtifacts(
             @Nonnull BuildPatternArtifactsRequest buildPatternArtifactsRequest, String servletContextUrl) {
+        throw new MissingRestAddonException();
+    }
+
+    @Override
+    public Response getBuildsDiff(Build firstBuild, Build secondBuild, HttpServletRequest request) {
+        throw new MissingRestAddonException();
+    }
+
+    @Override
+    public Map<FileInfo, String> getBuildArtifacts(BuildArtifactsRequest buildArtifactsRequest) {
+        throw new MissingRestAddonException();
+    }
+
+    @Override
+    public File getBuildArtifactsArchive(BuildArtifactsRequest buildArtifactsRequest) {
         throw new MissingRestAddonException();
     }
 

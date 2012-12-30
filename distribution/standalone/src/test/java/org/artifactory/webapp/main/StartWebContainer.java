@@ -27,6 +27,7 @@ import org.artifactory.common.ConstantValues;
 import org.artifactory.util.PathUtils;
 import org.artifactory.util.ResourceUtils;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.webapp.WebAppContext;
 import org.eclipse.jetty.xml.XmlConfiguration;
 
 import java.io.File;
@@ -59,12 +60,12 @@ public class StartWebContainer {
         }
         System.setProperty(ArtifactoryHome.SYS_PROP, artHome.getAbsolutePath());
 
+        updateDefaultResources(new File(standalone, "etc"));
+
         copyNewerDevResources(standalone, artHome);
 
         // set the logback.xml
         System.setProperty("logback.configurationFile", new File(artHome + "/etc/logback.xml").getAbsolutePath());
-
-        updateDefaultResources(new File(standalone, "etc"));
 
         //Manually set the selector (needed explicitly here before any logger kicks in)
         // create the logger only after artifactory.home is set
@@ -73,6 +74,9 @@ public class StartWebContainer {
             File etcDir = new File(artHome, "etc");
             URL configUrl = new URL("file:" + etcDir + "/jetty.xml");
             XmlConfiguration xmlConfiguration = new XmlConfiguration(configUrl);
+            WebAppContext appContext = new WebAppContext();
+            appContext.setServer(server);
+            appContext.getSessionHandler().getSessionManager().setSessionIdPathParameterName("none");
             server = new Server();
             xmlConfiguration.configure(server);
             server.start();

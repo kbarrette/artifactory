@@ -106,10 +106,20 @@ public interface JcrRepoService {
     @Lock(transactional = true)
     List<String> getChildrenNames(String absPath);
 
+    @Lock(transactional = true)
+    List<String> getChildrenNames(String absPath, boolean folderOnly);
+
     void trash(List<VfsItem> items);
 
     String getNodeTypeName(RepoPath repoPath);
 
     @Lock(transactional = true)
     void writeMetadataEntries(JcrFsItem fsItem, MutableStatusHolder status, File folder, boolean incremental);
+
+    /**
+     * Brute force deletes the given item and fires a local replication delete event as well
+     *
+     * @param item Item to delete
+     */
+    void bruteForceDeleteAndReplicateEvent(VfsItem item);
 }

@@ -52,7 +52,7 @@ import org.artifactory.repo.jcr.StoringRepoMixin;
 import org.artifactory.repo.service.InternalRepositoryService;
 import org.artifactory.repo.virtual.interceptor.VirtualRepoInterceptor;
 import org.artifactory.request.InternalRequestContext;
-import org.artifactory.request.RequestTraceLogger;
+import org.artifactory.request.RepoRequests;
 import org.artifactory.resource.ResourceStreamHandle;
 import org.artifactory.sapi.fs.VfsFolder;
 import org.slf4j.Logger;
@@ -272,10 +272,10 @@ public class VirtualRepo extends RepoBase<VirtualRepoDescriptor> implements Stor
 
     private RemoteRepo remoteRepositoryByRemoteOrCacheKey(String key) {
         //Try to get cached repositories
-        int idx = key.lastIndexOf(LocalCacheRepo.PATH_SUFFIX);
+        int idx = key.lastIndexOf(RepoPath.REMOTE_CACHE_SUFFIX);
         RemoteRepo remoteRepo;
         //Get the cache either by <remote-repo-name> or by <remote-repo-name>-cache
-        if (idx > 1 && idx + LocalCacheRepo.PATH_SUFFIX.length() == key.length()) {
+        if (idx > 1 && idx + RepoPath.REMOTE_CACHE_SUFFIX.length() == key.length()) {
             remoteRepo = remoteRepositoryByKey(key.substring(0, idx));
         } else {
             remoteRepo = remoteRepositoryByKey(key);
@@ -446,7 +446,7 @@ public class VirtualRepo extends RepoBase<VirtualRepoDescriptor> implements Stor
      */
     protected RepoResource interceptBeforeReturn(InternalRequestContext context, RepoResource foundResource) {
         for (VirtualRepoInterceptor interceptor : interceptors) {
-            RequestTraceLogger.log("Intercepting found resource with '%s'", interceptor.getClass().getSimpleName());
+            RepoRequests.logToContext("Intercepting found resource with '%s'", interceptor.getClass().getSimpleName());
             foundResource = interceptor.onBeforeReturn(this, context, foundResource);
         }
         return foundResource;
@@ -455,10 +455,10 @@ public class VirtualRepo extends RepoBase<VirtualRepoDescriptor> implements Stor
     public RepoResource interceptGetInfo(InternalRequestContext context, RepoPath repoPath,
             List<RealRepo> repositories) {
         for (VirtualRepoInterceptor interceptor : interceptors) {
-            RequestTraceLogger.log("Intercepting info request with '%s'", interceptor.getClass().getSimpleName());
+            RepoRequests.logToContext("Intercepting info request with '%s'", interceptor.getClass().getSimpleName());
             RepoResource repoResource = interceptor.interceptGetInfo(this, context, repoPath, repositories);
             if (repoResource != null) {
-                RequestTraceLogger.log("Info request was intercepted by '%s'",
+                RepoRequests.logToContext("Info request was intercepted by '%s'",
                         interceptor.getClass().getSimpleName());
                 return repoResource;
             }
@@ -640,8 +640,8 @@ public class VirtualRepo extends RepoBase<VirtualRepoDescriptor> implements Stor
     }
 
     @Override
-    public boolean isWriteLocked(RepoPath path) {
-        return storageMixin.isWriteLocked(path);
+    public boolean willOrIsWriteLocked(RepoPath path) {
+        return storageMixin.willOrIsWriteLocked(path);
     }
 
     @Override

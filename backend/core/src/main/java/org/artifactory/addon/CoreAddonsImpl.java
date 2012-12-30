@@ -28,10 +28,12 @@ import org.artifactory.addon.license.LicensesAddon;
 import org.artifactory.addon.plugin.ResponseCtx;
 import org.artifactory.addon.replication.LocalReplicationSettings;
 import org.artifactory.addon.replication.RemoteReplicationSettings;
+import org.artifactory.addon.replication.ReplicationAddon;
 import org.artifactory.api.common.MoveMultiStatusHolder;
 import org.artifactory.api.common.MultiStatusHolder;
 import org.artifactory.api.config.CentralConfigService;
 import org.artifactory.api.context.ContextHelper;
+import org.artifactory.api.request.ArtifactoryResponse;
 import org.artifactory.api.rest.replication.ReplicationStatus;
 import org.artifactory.api.rest.replication.ReplicationStatusType;
 import org.artifactory.common.MutableStatusHolder;
@@ -41,6 +43,7 @@ import org.artifactory.descriptor.property.Property;
 import org.artifactory.descriptor.property.PropertySet;
 import org.artifactory.descriptor.replication.LocalReplicationDescriptor;
 import org.artifactory.descriptor.replication.RemoteReplicationDescriptor;
+import org.artifactory.descriptor.replication.ReplicationBaseDescriptor;
 import org.artifactory.descriptor.repo.HttpRepoDescriptor;
 import org.artifactory.descriptor.repo.LocalRepoDescriptor;
 import org.artifactory.descriptor.repo.RealRepoDescriptor;
@@ -60,10 +63,12 @@ import org.artifactory.md.Properties;
 import org.artifactory.repo.HttpRepo;
 import org.artifactory.repo.LocalRepo;
 import org.artifactory.repo.RemoteRepo;
+import org.artifactory.repo.Repo;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.repo.service.InternalRepositoryService;
 import org.artifactory.repo.service.mover.MoverConfig;
 import org.artifactory.repo.virtual.VirtualRepo;
+import org.artifactory.request.ArtifactoryRequest;
 import org.artifactory.request.InternalRequestContext;
 import org.artifactory.request.Request;
 import org.artifactory.resource.MetadataResource;
@@ -80,6 +85,7 @@ import org.slf4j.Logger;
 import org.springframework.ldap.core.ContextSource;
 import org.springframework.ldap.core.DirContextOperations;
 import org.springframework.ldap.core.support.BaseLdapPathContextSource;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.ldap.search.FilterBasedLdapUserSearch;
 import org.springframework.stereotype.Component;
 
@@ -103,7 +109,7 @@ import java.util.Set;
  */
 @Component
 public class CoreAddonsImpl implements WebstartAddon, LdapGroupAddon, LicensesAddon, PropertiesAddon, LayoutsCoreAddon,
-        FilteredResourcesAddon, ReplicationAddon, YumAddon, NuGetAddon {
+        FilteredResourcesAddon, ReplicationAddon, YumAddon, NuGetAddon, RestCoreAddon, CrowdAddon {
 
     private static final Logger log = LoggerFactory.getLogger(CoreAddonsImpl.class);
 
@@ -343,6 +349,31 @@ public class CoreAddonsImpl implements WebstartAddon, LdapGroupAddon, LicensesAd
     }
 
     @Override
+    public void offerLocalReplicationDeploymentEvent(RepoPath repoPath) {
+    }
+
+    @Override
+    public void offerLocalReplicationMkDirEvent(RepoPath repoPath) {
+    }
+
+    @Override
+    public void offerLocalReplicationDeleteEvent(RepoPath repoPath) {
+    }
+
+    @Override
+    public void offerLocalReplicationMetadataDeploymentEvent(RepoPath repoPath, String metadataName) {
+    }
+
+    @Override
+    public void offerLocalReplicationMetadataDeleteEvent(RepoPath repoPath, String metadataName) {
+    }
+
+    @Override
+    public void validateTargetIsDifferentInstance(ReplicationBaseDescriptor descriptor,
+            RealRepoDescriptor repoDescriptor) throws IOException {
+    }
+
+    @Override
     public void performLegacyRemoteReplication(RemoteReplicationSettings remoteReplicationSettings) throws IOException {
     }
 
@@ -355,10 +386,6 @@ public class CoreAddonsImpl implements WebstartAddon, LdapGroupAddon, LicensesAd
 
     @Override
     public void requestAsyncRepositoryYumMetadataCalculation(RepoPath... repoPaths) {
-    }
-
-    @Override
-    public void calculateYumMetadata(RepoPath repoPath) {
     }
 
     @Override
@@ -403,6 +430,16 @@ public class CoreAddonsImpl implements WebstartAddon, LdapGroupAddon, LicensesAd
     }
 
     @Override
+    public void handleFindPackagesByIdRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey,
+            @Nonnull OutputStream output) throws IOException {
+    }
+
+    @Override
+    public void handleGetUpdatesRequest(@Nonnull HttpServletRequest request, @Nonnull String repoKey,
+            @Nullable String actionParam, @Nonnull OutputStream output) {
+    }
+
+    @Override
     @Nonnull
     public RepoPath assembleDeploymentRepoPathFromNuPkgSpec(@Nonnull String repoKey, @Nonnull byte[] packageBytes) {
         throw new IllegalArgumentException("Unable to assemble deployment repo path.");
@@ -420,5 +457,32 @@ public class CoreAddonsImpl implements WebstartAddon, LdapGroupAddon, LicensesAd
     public RemoteRepo createRemoteRepo(InternalRepositoryService repoService, RemoteRepoDescriptor repoDescriptor,
             boolean offlineMode, RemoteRepo oldRemoteRepo) {
         return new HttpRepo(repoService, (HttpRepoDescriptor) repoDescriptor, offlineMode, oldRemoteRepo);
+    }
+
+    @Override
+    public void deployArchiveBundle(ArtifactoryRequest request, ArtifactoryResponse response, LocalRepo repo)
+            throws IOException {
+        response.sendError(HttpStatus.SC_BAD_REQUEST, "This REST API is available only in Artifactory Pro.", log);
+    }
+
+    @Override
+    public InternalRequestContext getDynamicVersionContext(Repo repo, InternalRequestContext originalRequestContext,
+            boolean isRemote) {
+        return originalRequestContext;
+    }
+
+    @Override
+    public boolean isCrowdAuthenticationSupported(Class<?> authentication) {
+        return false;
+    }
+
+    @Override
+    public Authentication authenticateCrowd(Authentication authentication) {
+        throw new UnsupportedOperationException("This feature requires the Crowd SSO addon.");
+    }
+
+    @Override
+    public boolean findUser(String userName) {
+        return false;
     }
 }

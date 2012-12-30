@@ -32,8 +32,10 @@ public interface BuildRestConstants {
 
     String MT_BUILD = RestConstants.MT_JFROG_APP + PATH_ROOT + ".Build+json";
     String MT_BUILD_INFO = RestConstants.MT_JFROG_APP + PATH_ROOT + ".BuildInfo+json";
+    String MT_BUILDS_DIFF = RestConstants.MT_JFROG_APP + PATH_ROOT + ".BuildsDiff+json";
     String MT_BUILD_PATTERN_ARTIFACTS_REQUEST = RestConstants.MT_JFROG_APP + PATH_ROOT + ".BuildPatternArtifactsRequest+json";
     String MT_BUILD_PATTERN_ARTIFACTS_RESULT = RestConstants.MT_JFROG_APP + PATH_ROOT + ".BuildPatternArtifactsResult+json";
+    String MT_BUILD_ARTIFACTS_REQUEST = RestConstants.MT_ARTIFACTORY_APP + PATH_ROOT + ".BuildArtifactsRequest+json";
 
     @Deprecated
     String MT_COPY_MOVE_RESULT = RestConstants.MT_ARTIFACTORY_APP + PATH_ROOT + ".CopyOrMoveResult+json";

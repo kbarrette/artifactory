@@ -37,6 +37,7 @@ import org.apache.wicket.extensions.markup.html.tabs.ITab;
 import org.apache.wicket.injection.Injector;
 import org.apache.wicket.markup.html.WebComponent;
 import org.apache.wicket.markup.html.WebMarkupContainer;
+import org.apache.wicket.markup.html.WebPage;
 import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.form.DropDownChoice;
 import org.apache.wicket.markup.html.form.Form;
@@ -57,7 +58,7 @@ import org.artifactory.addon.AddonType;
 import org.artifactory.addon.AddonsManager;
 import org.artifactory.addon.CoreAddons;
 import org.artifactory.addon.OssAddonsManager;
-import org.artifactory.addon.p2.P2RemoteRepository;
+import org.artifactory.addon.p2.P2Repository;
 import org.artifactory.addon.p2.P2WebAddon;
 import org.artifactory.addon.wicket.disabledaddon.AddonNeededBehavior;
 import org.artifactory.addon.wicket.disabledaddon.DisabledAddonBehavior;
@@ -69,6 +70,9 @@ import org.artifactory.api.config.CentralConfigService;
 import org.artifactory.api.config.VersionInfo;
 import org.artifactory.api.context.ContextHelper;
 import org.artifactory.api.license.LicenseInfo;
+import org.artifactory.api.rest.build.artifacts.BuildArtifactsRequest;
+import org.artifactory.api.rest.build.diff.BuildsDiff;
+import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.api.security.UserGroupService;
 import org.artifactory.api.version.VersionHolder;
 import org.artifactory.api.version.VersionInfoService;
@@ -122,7 +126,6 @@ import org.artifactory.repo.RepoPath;
 import org.artifactory.request.Request;
 import org.artifactory.sapi.common.ExportSettings;
 import org.artifactory.security.GroupInfo;
-import org.artifactory.security.UserGroupInfo;
 import org.artifactory.security.UserInfo;
 import org.artifactory.util.HttpUtils;
 import org.artifactory.webapp.actionable.ActionableItem;
@@ -133,6 +136,7 @@ import org.artifactory.webapp.servlet.RequestUtils;
 import org.artifactory.webapp.wicket.application.ArtifactoryApplication;
 import org.artifactory.webapp.wicket.page.base.BasePage;
 import org.artifactory.webapp.wicket.page.base.EditProfileLink;
+import org.artifactory.webapp.wicket.page.base.LoginLink;
 import org.artifactory.webapp.wicket.page.base.LogoutLink;
 import org.artifactory.webapp.wicket.page.browse.treebrowser.tabs.build.BaseBuildsTabPanel;
 import org.artifactory.webapp.wicket.page.browse.treebrowser.tabs.build.actionable.BuildDependencyActionableItem;
@@ -142,6 +146,7 @@ import org.artifactory.webapp.wicket.page.build.actionable.ModuleArtifactActiona
 import org.artifactory.webapp.wicket.page.build.actionable.ModuleDependencyActionableItem;
 import org.artifactory.webapp.wicket.page.build.tabs.BuildSearchResultsPanel;
 import org.artifactory.webapp.wicket.page.build.tabs.DisabledModuleInfoTabPanel;
+import org.artifactory.webapp.wicket.page.build.tabs.diff.DisabledBuildDiffTabPanel;
 import org.artifactory.webapp.wicket.page.config.SchemaHelpBubble;
 import org.artifactory.webapp.wicket.page.config.SchemaHelpModel;
 import org.artifactory.webapp.wicket.page.config.advanced.AdvancedCentralConfigPage;
@@ -187,11 +192,11 @@ import org.jfrog.build.api.Module;
 import org.jfrog.build.api.dependency.BuildPatternArtifacts;
 import org.jfrog.build.api.dependency.BuildPatternArtifactsRequest;
 import org.slf4j.Logger;
-import org.springframework.security.core.Authentication;
 
 import javax.annotation.Nonnull;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.Reader;
 import java.util.Collections;
 import java.util.List;
@@ -211,8 +216,10 @@ import static org.artifactory.addon.AddonType.*;
  */
 @org.springframework.stereotype.Component
 public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, PropertiesWebAddon, SearchAddon,
-        WatchAddon, WebstartWebAddon, SsoAddon, LdapGroupWebAddon, BuildAddon, LicensesWebAddon, LayoutsWebAddon,
-        FilteredResourcesWebAddon, ReplicationWebAddon, YumWebAddon, P2WebAddon, NuGetWebAddon {
+        WatchAddon, WebstartWebAddon, HttpSsoAddon, CrowdWebAddon, SamlAddon, SamlWebAddon, LdapGroupWebAddon,
+        BuildAddon,
+        LicensesWebAddon, LayoutsWebAddon, FilteredResourcesWebAddon, ReplicationWebAddon, YumWebAddon, P2WebAddon,
+        NuGetWebAddon {
     private static final Logger log = LoggerFactory.getLogger(WicketAddonsImpl.class);
 
     @Override
@@ -222,16 +229,20 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public MenuNode getSecurityMenuNode(WebstartWebAddon webstartAddon, SsoAddon ssoAddon) {
+    public MenuNode getSecurityMenuNode(WebstartWebAddon webstartAddon) {
         MenuNode security = new MenuNode("Security");
         security.addChild(new MenuNode("General", SecurityGeneralConfigPage.class));
         security.addChild(new MenuNode("Users", UsersPage.class));
         security.addChild(new MenuNode("Groups", GroupsPage.class));
         security.addChild(new MenuNode("Permissions", AclsPage.class));
         security.addChild(new MenuNode("LDAP Settings", LdapsListPage.class));
-        security.addChild(ssoAddon.getCrowdAddonMenuNode("Crowd Integration"));
+        CrowdWebAddon crowdWebAddon = getAddonsManager().addonByType(CrowdWebAddon.class);
+        security.addChild(crowdWebAddon.getCrowdAddonMenuNode("Crowd Integration"));
+        SamlWebAddon samlWebAddon = getAddonsManager().addonByType(SamlWebAddon.class);
+        security.addChild(samlWebAddon.getSamlAddonMenuNode("SAML Integration"));
+        HttpSsoAddon httpSsoAddon = getAddonsManager().addonByType(HttpSsoAddon.class);
+        security.addChild(httpSsoAddon.getHttpSsoMenuNode("HTTP SSO"));
         security.addChild(webstartAddon.getKeyPairMenuNode());
-        security.addChild(ssoAddon.getHttpSsoMenuNode("HTTP SSO"));
         return security;
     }
 
@@ -281,6 +292,27 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
+    public AbstractLink getLoginLink(String wicketId) {
+        return new LoginLink(wicketId, "Log In");
+    }
+
+    @Override
+    public boolean isAutoRedirectToSamlIdentityProvider() {
+        return false;
+    }
+
+
+    @Override
+    public boolean isSamlEnabled() {
+        return false;
+    }
+
+    @Override
+    public String getSamlLoginIdentityProviderUrl() {
+        return null;
+    }
+
+    @Override
     public AbstractLink getProfileLink(String wicketId) {
         return new EditProfileLink("profilePage");
     }
@@ -293,6 +325,18 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
 
     @Override
     public boolean isInstantiationAuthorized(Class componentClass) {
+        if (componentClass.equals(LicensePage.class)) {
+            AuthorizationService authorizationService = ContextHelper.get().getAuthorizationService();
+            if (!authorizationService.isAdmin() && getAddonsManager().isLicenseInstalled()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Override
+    public boolean isVisibilityAuthorized(Class componentClass) {
         return true;
     }
 
@@ -378,6 +422,21 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     public BuildPatternArtifacts getBuildPatternArtifacts(
             @Nonnull BuildPatternArtifactsRequest buildPatternArtifactsRequest, String servletContextUrl) {
         return new BuildPatternArtifacts();
+    }
+
+    @Override
+    public Map<FileInfo, String> getBuildArtifacts(BuildArtifactsRequest buildArtifactsRequest) {
+        return null;
+    }
+
+    @Override
+    public File getBuildArtifactsArchive(BuildArtifactsRequest buildArtifactsRequest) {
+        return null;
+    }
+
+    @Override
+    public BuildsDiff getBuildsDiff(Build firstBuild, Build secondBuild, String baseStorageInfoUri) {
+        return null;
     }
 
     @Override
@@ -523,16 +582,6 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public boolean isCrowdAuthenticationSupported(Class<?> authentication) {
-        return false;
-    }
-
-    @Override
-    public Authentication authenticateCrowd(Authentication authentication) {
-        throw new UnsupportedOperationException("This feature requires the Crowd SSO addon.");
-    }
-
-    @Override
     public MenuNode getCrowdAddonMenuNode(String nodeName) {
         return new DisabledAddonMenuNode(nodeName, AddonType.SSO);
     }
@@ -543,7 +592,7 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public void logOffSso(HttpServletRequest request, HttpServletResponse response) {
+    public void logOffCrowd(HttpServletRequest request, HttpServletResponse response) {
     }
 
     @Override
@@ -552,13 +601,18 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public boolean findUser(String userName) {
-        return false;
+    public Class<? extends WebPage> getSamlLoginRequestPageClass() {
+        return null;
     }
 
     @Override
-    public void addExternalGroups(String userName, Set<UserGroupInfo> groups) {
-        // nop
+    public Class<? extends Page> getSamlLoginResponsePageClass() {
+        return null;
+    }
+
+    @Override
+    public Class<? extends WebPage> getSamlLogoutRequestPageClass() {
+        return null;
     }
 
     @Override
@@ -585,8 +639,13 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public ITab getModuleInfoTab(String buildName, String buildNumber, final Module module) {
+    public ITab getModuleInfoTab(Build build, Module module) {
         return new DisabledPublishedTab();
+    }
+
+    @Override
+    public ITab getBuildDiffTab(String title, Build build, boolean hasDeployOnLocal) {
+        return new DisabledBuildDiffTab();
     }
 
     @Override
@@ -796,6 +855,26 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
         return adminEmails;
     }
 
+    @Override
+    public void validateTargetHasDifferentLicenseKeyHash(String targetLicenseHash) {
+        AddonsManager addonsManager = getAddonsManager();
+        // Skip Trial license
+        if (isTrial(addonsManager)) {
+            log.debug("Source has trial license, skipping target instance license validation.");
+            return;
+        }
+        if (StringUtils.isBlank(targetLicenseHash)) {
+            throw new IllegalArgumentException("Target Artifactory instance license key is null, perhaps OSS version?");
+        }
+        if (addonsManager.getLicenseKeyHash().equals(targetLicenseHash)) {
+            throw new IllegalArgumentException("Replication between same-license servers is not supported.");
+        }
+    }
+
+    private boolean isTrial(AddonsManager addonsManager) {
+        return addonsManager.isLicenseInstalled() && "Trial".equalsIgnoreCase(addonsManager.getLicenseDetails()[2]);
+    }
+
     private CentralConfigService getCentralConfig() {
         return ArtifactoryApplication.get().getCentralConfig();
     }
@@ -821,13 +900,14 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public ITab getLocalRepoReplicationPanel(String tabTitle, LocalReplicationDescriptor replicationDescriptor,
+    public ITab getLocalRepoReplicationPanel(String tabTitle, LocalRepoDescriptor entity,
+            LocalReplicationDescriptor replicationDescriptor,
             MutableCentralConfigDescriptor mutableDescriptor, CreateUpdateAction action) {
         return new DisabledAddonTab(Model.<String>of(tabTitle), AddonType.REPLICATION);
     }
 
     @Override
-    public MarkupContainer getLastReplicationStatusLabel(String id, RepoPath repoPath) {
+    public MarkupContainer getLastReplicationStatusLabel(String id, RepoPath repoPath, boolean isCache) {
         return new PlaceHolder(id);
     }
 
@@ -854,7 +934,7 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public ITab getRpmInfoTab(String tabTitle, RepoPath repoPath) {
+    public ITab getRpmInfoTab(String tabTitle, FileInfo fileInfo) {
         return new DisabledAddonTab(Model.<String>of(tabTitle), AddonType.YUM);
     }
 
@@ -865,17 +945,19 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
     }
 
     @Override
-    public List<P2RemoteRepository> verifyRemoteRepositories(MutableCentralConfigDescriptor currentDescriptor,
-            VirtualRepoDescriptor virtualRepo, List<P2RemoteRepository> currentList, MutableStatusHolder statusHolder) {
+    public List<P2Repository> verifyRemoteRepositories(MutableCentralConfigDescriptor currentDescriptor,
+            VirtualRepoDescriptor virtualRepo, List<P2Repository> currentList,
+            Map<String, List<String>> subCompositeUrls, MutableStatusHolder statusHolder) {
         statusHolder.setError("Error: the P2 addon is required for this operation.",
                 HttpStatus.SC_BAD_REQUEST, log);
         return null;
     }
 
     @Override
-    public void createAndAddRemoteRepoConfigP2Section(Form form) {
+    public void createAndAddRemoteRepoConfigP2Section(Form form, RemoteRepoDescriptor descriptor) {
         WebMarkupContainer p2Border = new WebMarkupContainer("p2Border");
         p2Border.add(new TitledBorderBehavior("fieldset-border", "P2 Support"));
+        p2Border.add(new WebMarkupContainer("p2OriginalUrl"));
         p2Border.add(new DisabledAddonBehavior(AddonType.P2));
         form.add(p2Border);
         p2Border.add(new StyledCheckbox("p2Support").setEnabled(false));
@@ -904,6 +986,7 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
             nuGetBorder.add(new SchemaHelpBubble("downloadContextPath.help",
                     new SchemaHelpModel(dummyConf, "downloadContextPath")));
         }
+        nuGetBorder.add(getNuGetUrlLabel(repoDescriptor));
         form.add(nuGetBorder);
     }
 
@@ -914,12 +997,24 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
 
     @Override
     public HttpMethodBase getRemoteRepoTestMethod(String repoUrl, HttpRepoDescriptor repo) {
-        return new HeadMethod(repoUrl);
+        return new HeadMethod(HttpUtils.encodeQuery(repoUrl));
     }
 
     @Override
     public ITab getNuPkgInfoTab(String tabTitle, RepoPath nuPkgRepoPath) {
         return new DisabledAddonTab(Model.<String>of(tabTitle), AddonType.NUGET);
+    }
+
+    @Override
+    public Label getNuGetUrlLabel(RepoDescriptor repoDescriptor) {
+        Label label = new Label("nuGetRepoUrlLabel", "");
+        label.setVisible(false);
+        return label;
+    }
+
+    @Override
+    public MenuNode getSamlAddonMenuNode(String nodeName) {
+        return new DisabledAddonMenuNode(nodeName, AddonType.SSO);
     }
 
     private static class UpdateNewsFromCache extends AbstractAjaxTimerBehavior {
@@ -986,6 +1081,23 @@ public final class WicketAddonsImpl implements CoreAddons, WebApplicationAddon, 
         @Override
         public Panel getPanel(String panelId) {
             return new DisabledModuleInfoTabPanel(panelId);
+        }
+
+        @Override
+        public void onNewTabItem(LoopItem item) {
+            super.onNewTabItem(item);
+            item.add(new AddonNeededBehavior(AddonType.BUILD));
+        }
+    }
+
+    private static class DisabledBuildDiffTab extends BaseTab {
+        public DisabledBuildDiffTab() {
+            super("Diff");
+        }
+
+        @Override
+        public Panel getPanel(String panelId) {
+            return new DisabledBuildDiffTabPanel(panelId);
         }
 
         @Override

@@ -1835,6 +1835,24 @@ div.footer, .copywrites, .version {
     text-align: center;
 }
 
+.storage-quota-limit {
+    background-color: #FF6241;
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 3px;
+    text-align: center;
+}
+
+.storage-quota-warning {
+    background-color: #FFCB24;
+    color: black;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 3px;
+    text-align: center;
+}
+
 .no-license a {
     color: white;
     text-decoration: underline;
@@ -1914,6 +1932,19 @@ div.footer, .copywrites, .version {
     font-weight: bold;
     color: #666666;
     line-height: 1em;
+}
+
+.bintray_button {
+    background: url("images/buttons/bintray/BTN-bintray-normal.png");
+    position: absolute;
+    top: 25px;
+    right: 25px;
+    width: 158px;
+    height: 41px;
+}
+
+.bintray_button:hover, .bintray_button:focus {
+    background: url("images/buttons/bintray/BTN-bintray-over.png");;
 }
 
 .quick-search-box {
@@ -2617,19 +2648,16 @@ div.wicket-modal div.w_modal div.w_content, div.wicket-modal div.w_modal div.w_c
 div.wicket-modal div.w_modal div.w_caption {
     background: none;
     height: auto;
-    padding-top: 15px;
+    padding-top: 10px;
+    padding-bottom: 10px;
     cursor: move;
-}
-
-.Safari div.wicket-modal div.w_modal div.w_caption, .Chrome div.wicket-modal div.w_modal div.w_caption {
-    padding-bottom: 4px;
 }
 
 div.wicket-modal span.w_captionText {
     height: auto;
     color: #4C4E53;
     font-size: 20px;
-    padding: 0 15px;
+    padding: 0 10px;
     margin-right: 30px;
     display: inline-block;
     position: relative !important;
@@ -3600,6 +3628,11 @@ div.general-settings-panel input.text-file {
     width: 650px
 }
 
+.certificate-text-area {
+    font-family: monospace;
+    width: 650px
+}
+
 .license-border {
     margin-top: -3px;
     margin-left: 8px;
@@ -3621,12 +3654,20 @@ div.general-settings-panel input.text-file {
     color: blue;
 }
 
+.green-listed-label {
+    color: green;
+}
+
 .orange-listed-label {
     color: #FF6600;
 }
 
 .gray-listed-label {
     color: gray;
+}
+
+.bold-listed-label {
+    font-weight: bold;
 }
 
 /*-- icons --*/
@@ -4311,7 +4352,7 @@ div.wupb-progressBar .wupb-background {
 }
 
 /*  Small Text box for hours fields */
-.cron-fields input.indexing-interval-hours, input.retention-period-hours {
+.cron-fields input.indexing-interval-hours, input.retention-period-hours, input.yum-folder-depth {
     width: 70px;
 }
 
@@ -4360,7 +4401,7 @@ table.data-table tr.headers button.styled-checkbox .button-center {
 /*-- ProfilePanel --*/
 
 .unlock-profile-form input.text {
-    width: 150px;
+    width: 200px;
 }
 
 .unlock-profile-form  button {
@@ -4391,15 +4432,23 @@ table.data-table tr.headers button.styled-checkbox .button-center {
 }
 
 .update-profile-form input.text {
-    width: 150px;
+    width: 200px;
 }
 
 .update-profile-form .textbox-disabled {
-    min-width: 150px;
+    min-width: 200px;
 }
 
 .update-profile-form .value {
     padding-top: 2px;
+}
+
+.bintray-profile-form input.text {
+    width: 330px;
+}
+
+.bintray-link {
+    background-image: url("images/icons/bintray.png");
 }
 
 .profile-password {
@@ -4408,7 +4457,7 @@ table.data-table tr.headers button.styled-checkbox .button-center {
 
 .profile-password .password-strength {
     position: relative;
-    left: 170px;
+    left: 220px;
     top: -22px;
 }
 
@@ -5082,7 +5131,6 @@ table.data-table td.add-value-row {
 
 .settings-snippet {
     position: relative;
-    margin-top: 25px;
 }
 
 .settings-snippet .info {
@@ -5535,7 +5583,7 @@ td.warn span {
 }
 
 .checkbox-row .field {
-    min-width: 180px;
+    min-width: 210px;
     padding: 0 10px 0 0;
 }
 
@@ -5568,6 +5616,10 @@ td.warn span {
 
 .local-repo-config .field-row select {
     width: 266px;
+}
+
+.local-repo-config .line-sep {
+    height: 88px;
 }
 
 .advanced-remote-repo .line-sep {

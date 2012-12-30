@@ -58,6 +58,8 @@ import org.artifactory.api.search.deployable.VersionUnitSearchControls;
 import org.artifactory.api.search.deployable.VersionUnitSearchResult;
 import org.artifactory.api.security.AclService;
 import org.artifactory.api.security.AuthorizationService;
+import org.artifactory.api.storage.StorageQuotaInfo;
+import org.artifactory.api.storage.StorageService;
 import org.artifactory.checksum.ChecksumInfo;
 import org.artifactory.checksum.ChecksumType;
 import org.artifactory.checksum.ChecksumsInfo;
@@ -108,7 +110,7 @@ import org.artifactory.repo.virtual.VirtualRepo;
 import org.artifactory.request.InternalArtifactoryResponse;
 import org.artifactory.request.InternalRequestContext;
 import org.artifactory.request.NullRequestContext;
-import org.artifactory.request.RequestTraceLogger;
+import org.artifactory.request.RepoRequests;
 import org.artifactory.resource.ResolvedResource;
 import org.artifactory.resource.ResourceStreamHandle;
 import org.artifactory.resource.UnfoundRepoResource;
@@ -154,6 +156,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -206,6 +209,9 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
 
     @Autowired
     private UploadService uploadService;
+
+    @Autowired
+    private StorageService storageService;
 
     private VirtualRepo globalVirtualRepo;
 
@@ -279,33 +285,29 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
 
     private StatusHolder deleteOrphanRepo(String repoKey) {
         BasicStatusHolder status = new BasicStatusHolder();
-        RepoPath repoPath;
         RemoteRepo remoteRepo = remoteRepositoryByKey(repoKey);
         if (remoteRepo != null) {
-            // for remote repos we have to delete the cache if exists
-            if (!remoteRepo.isStoreArtifactsLocally()) {
-                // if the cache repository node exists, delete it using jcr paths directly since there is no backing
-                // repository(it is possible when a remote repo started with store artifacts locally and was later
-                // changed not to)
-                String cacheRepoJcrPath = PathFactoryHolder.get().getRepoRootPath(repoKey + LocalCacheRepo.PATH_SUFFIX);
-                if (jcr.itemNodeExists(cacheRepoJcrPath)) {
-                    try {
-                        Trashman trashman = jcr.getManagedSession().getOrCreateResource(Trashman.class);
-                        trashman.addPathsToTrash(Arrays.asList(cacheRepoJcrPath), jcr);
-                    } catch (Exception e) {
-                        status.setError(
-                                "Could not move remote repository cache node " + cacheRepoJcrPath + "  to trash.",
-                                e, log);
-                    }
+            // if the cache repository node exists, delete it using jcr paths directly since there is no backing
+            // repository(it is possible when a remote repo started with store artifacts locally and was later
+            // changed not to)
+            String cacheRepoJcrPath = PathFactoryHolder.get().getRepoRootPath(
+                    repoKey + RepoPath.REMOTE_CACHE_SUFFIX);
+            if (jcr.itemNodeExists(cacheRepoJcrPath)) {
+                try {
+                    Trashman trashman = jcr.getManagedSession().getOrCreateResource(Trashman.class);
+                    trashman.addPathsToTrash(Arrays.asList(cacheRepoJcrPath), jcr);
+                } catch (Exception e) {
+                    status.setError(
+                            "Could not move remote repository cache node " + cacheRepoJcrPath + "  to trash.",
+                            e, log);
                 }
-                return status;
+            } else {
+                status.setDebug("Remote repo " + repoKey + " has no local cached artifacts", log);
             }
-            // delete the local cache
-            LocalCacheRepo localCacheRepo = remoteRepo.getLocalCacheRepo();
-            repoPath = InternalRepoPathFactory.repoRootPath(localCacheRepo.getKey());
-        } else {
-            repoPath = InternalRepoPathFactory.repoRootPath(repoKey);
+            return status;
         }
+
+        RepoPath repoPath = InternalRepoPathFactory.repoRootPath(repoKey);
         // delete repo content
         status = undeploy(repoPath);
 
@@ -516,14 +518,18 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
 
     @Override
     public boolean mkdirs(RepoPath folderRepoPath) {
-        if (!exists(folderRepoPath)) {
-
-            LocalRepo localRepo = getLocalRepository(folderRepoPath);
-
-            JcrFolder jcrFolder = localRepo.getLockedJcrFolder(folderRepoPath.getPath(), true);
+        // Support virtual repo cache folder creation
+        StoringRepo mixin;
+        VirtualRepo virtualRepo = virtualRepositoryByKey(folderRepoPath.getRepoKey());
+        if (virtualRepo != null) {
+            mixin = virtualRepo.getStorageMixin();
+        } else {
+            mixin = getLocalRepository(folderRepoPath).getStorageMixin();
+        }
+        if (!mixin.itemExists(folderRepoPath.getPath())) {
+            JcrFolder jcrFolder = mixin.getLockedJcrFolder(folderRepoPath.getPath(), true);
             return jcrFolder.exists() || jcrFolder.mkdirs();
         }
-
         return false;
     }
 
@@ -710,7 +716,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
         if (TaskCallback.currentTaskToken() == null) {
             importAsync(repoKey, settings, false, true);
         } else {
-            //Import each file seperately to avoid a long running transaction
+            //Import each file separately to avoid a long running transaction
             LocalRepo localRepo = localOrCachedRepositoryByKey(repoKey);
             if (localRepo == null) {
                 String msg = "The repo key " + repoKey + " is not a local or cached repository!";
@@ -1139,10 +1145,10 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     @Override
     public StatusHolder deploy(RepoPath repoPath, InputStream inputStream) {
         try {
-            ArtifactoryDeployRequest request =
-                    new ArtifactoryDeployRequest(repoPath, inputStream, -1, System.currentTimeMillis());
+            ArtifactoryDeployRequest request = new ArtifactoryDeployRequestBuilder(repoPath)
+                    .inputStream(inputStream).build();
             InternalArtifactoryResponse response = new InternalArtifactoryResponse();
-            uploadService.process(request, response);
+            uploadService.upload(request, response);
             return response.getStatusHolder();
         } catch (Exception e) {
             String msg = String.format("Cannot deploy to '{%s}'.", repoPath);
@@ -1528,7 +1534,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
         }
 
         // If already write locked nothing to do the stats, metadata in queue will be updated
-        if (!repo.isWriteLocked(repoPath)) {
+        if (!repo.willOrIsWriteLocked(repoPath)) {
             // Just write locking the file will save any dirty state upon commit (stats and metadata)
             repo.getLockedJcrFsItem(repoPath);
         }
@@ -1654,13 +1660,13 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     }
 
     @Override
-    public void assertValidDeployPath(RepoPath repoPath) throws RepoRejectException {
+    public void assertValidDeployPath(RepoPath repoPath, long contentLength) throws RepoRejectException {
         String repoKey = repoPath.getRepoKey();
         LocalRepo localRepo = localOrCachedRepositoryByKey(repoKey);
         if (localRepo == null) {
             throw new RepoRejectException("The repository '" + repoKey + "' is not configured.");
         }
-        assertValidDeployPath(localRepo, repoPath.getPath());
+        assertValidDeployPath(localRepo, repoPath.getPath(), contentLength);
     }
 
     @Override
@@ -1690,7 +1696,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     }
 
     @Override
-    public void assertValidDeployPath(LocalRepo repo, String path) throws RepoRejectException {
+    public void assertValidDeployPath(LocalRepo repo, String path, long contentLength) throws RepoRejectException {
         BasicStatusHolder status = repo.assertValidPath(path, false);
 
         if (!status.isError()) {
@@ -1717,6 +1723,11 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
             if (!status.isError()) {
                 assertDelete(repo, path, true, status);
             }
+
+            if (!status.isError()) {
+                // Assert that we don't exceed the user configured maximum storage size
+                assertStorageQuota(status, contentLength);
+            }
         }
         if (status.isError()) {
             if (status.getException() != null) {
@@ -1727,6 +1738,24 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
                 throw new RepoRejectException(throwable);
             }
             throw new RepoRejectException(status.getStatusMsg(), status.getStatusCode());
+        }
+    }
+
+    private void assertStorageQuota(MutableStatusHolder statusHolder, long contentLength) {
+        StorageQuotaInfo info = storageService.getStorageQuotaInfo(contentLength);
+        if (info == null) {
+            return;
+        }
+
+        if (info.isLimitReached()) {
+            // Note: don't display the disk usage in the status holder - this message is written back to the user
+            statusHolder.setError(
+                    "Datastore disk usage is too high. Contact your Artifactory administrator to add additional " +
+                            "storage space or change the disk quota limits.", HttpStatus.SC_REQUEST_TOO_LONG, log);
+
+            log.error(info.getErrorMessage());
+        } else if (info.isWarningLimitReached()) {
+            log.warn(info.getWarningMessage());
         }
     }
 
@@ -1762,25 +1791,31 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
     public ResourceStreamHandle getResourceStreamHandle(InternalRequestContext requestContext, Repo repo,
             RepoResource res) throws IOException, RepoRejectException, RepositoryException {
         if (res instanceof ResolvedResource) {
-            RequestTraceLogger.log("The requested resource is already resolved - using a string resource handle");
+            RepoRequests.logToContext("The requested resource is already resolved - using a string resource handle");
             // resource already contains the content - just extract it and return a string resource handle
             String content = ((ResolvedResource) res).getContent();
             return new StringResourceStreamHandle(content);
         } else {
-            RequestTraceLogger.log("The requested resource isn't pre-resolved");
+            RepoRequests.logToContext("The requested resource isn't pre-resolved");
             RepoPath repoPath = res.getRepoPath();
             if (repo.isReal()) {
-                RequestTraceLogger.log("Target repository isn't virtual - verifying that downloading is allowed");
+                RepoRequests.logToContext("Target repository isn't virtual - verifying that downloading is allowed");
                 //Permissions apply only to real repos
                 StatusHolder holder = ((RealRepo) repo).checkDownloadIsAllowed(repoPath);
                 if (holder.isError()) {
-                    RequestTraceLogger.log("Download isn't allowed - received status {} and message '%s'",
+                    RepoRequests.logToContext("Download isn't allowed - received status {} and message '%s'",
                             holder.getStatusCode(), holder.getStatusMsg());
                     throw new RepoRejectException(holder.getStatusMsg(), holder.getStatusCode());
                 }
             }
             return repo.getResourceStreamHandle(requestContext, res);
         }
+    }
+
+    @Override
+    public RepoResource saveResource(StoringRepo repo, SaveResourceContext saveContext)
+            throws IOException, RepoRejectException, RepositoryException {
+        return repo.saveResource(saveContext);
     }
 
     @Override
@@ -2361,7 +2396,7 @@ public class RepositoryServiceImpl implements InternalRepositoryService {
             headerVal = "http://" + headerVal;
         }
         try {
-            java.net.URL uri = new java.net.URL(headerVal);
+            URL uri = new URL(headerVal);
             //Only use the uri up to the path part
             headerVal = uri.getProtocol() + "://" + uri.getAuthority();
         } catch (MalformedURLException e) {

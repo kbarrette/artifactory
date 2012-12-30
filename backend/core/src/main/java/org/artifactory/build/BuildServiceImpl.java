@@ -20,6 +20,8 @@ package org.artifactory.build;
 
 import com.gc.iotools.stream.is.InputStreamFromOutputStream;
 import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -91,6 +93,8 @@ import org.jfrog.build.api.BuildAgent;
 import org.jfrog.build.api.BuildFileBean;
 import org.jfrog.build.api.BuildType;
 import org.jfrog.build.api.Dependency;
+import org.jfrog.build.api.Issue;
+import org.jfrog.build.api.Issues;
 import org.jfrog.build.api.Module;
 import org.jfrog.build.api.release.Promotion;
 import org.jfrog.build.api.release.PromotionStatus;
@@ -113,6 +117,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -223,6 +228,8 @@ public class BuildServiceImpl implements InternalBuildService {
         Set<String> dependencyChecksums = Sets.newHashSet();
         collectModuleChecksums(build.getModules(), artifactChecksums, dependencyChecksums);
 
+        aggregatePreviousBuildIssues(build);
+
         DetailedBuildRun detailedBuildRun = new DetailedBuildRunImpl(build);
         PluginsAddon pluginsAddon = addonsManager.addonByType(PluginsAddon.class);
         pluginsAddon.execPluginActions(BeforeBuildSaveAction.class, builds, detailedBuildRun);
@@ -272,6 +279,54 @@ public class BuildServiceImpl implements InternalBuildService {
         licensesAddon.performOnBuildArtifacts(build);
 
         pluginsAddon.execPluginActions(AfterBuildSaveAction.class, builds, detailedBuildRun);
+    }
+
+    /**
+     * Check if the latest build available has issues, add them all the our newly created build
+     * only if the previous build status is not in "Released" status (configurable status from our plugins).
+     * This way we collect all previous issues related to the same version which is not released yet.
+     *
+     * @param newBuild the newly created build to add previous issues to
+     */
+    private void aggregatePreviousBuildIssues(Build newBuild) {
+        Issues newBuildIssues = newBuild.getIssues();
+        if (newBuildIssues == null) {
+            return;
+        }
+
+        if (!newBuildIssues.isAggregateBuildIssues()) {
+            return;
+        }
+
+        Build latestBuild = getLatestBuildByNameAndStatus(newBuild.getName(), LATEST_BUILD);
+        if (latestBuild == null) {
+            return;
+        }
+
+        // Only aggregate if the previous build does not equal to the user requested status (e.g: "Released")
+        // this way we only aggregate the issues related to the current release
+        List<PromotionStatus> statuses = latestBuild.getStatuses();
+        if (statuses != null) {
+            String aggregationBuildStatus = newBuildIssues.getAggregationBuildStatus();
+            for (PromotionStatus status : statuses) {
+                if (status.getStatus().equalsIgnoreCase(aggregationBuildStatus)) {
+                    return;
+                }
+            }
+        }
+
+        // It is important to create new Issue instance so we won't mess up previous ones
+        Issues previousIssues = latestBuild.getIssues();
+        if (previousIssues != null) {
+            Set<Issue> affectedIssues = previousIssues.getAffectedIssues();
+            if (affectedIssues != null) {
+                for (Issue issue : affectedIssues) {
+                    Issue issueToAdd = new Issue(issue.getKey(), issue.getUrl(), issue.getSummary());
+                    issueToAdd.setAggregated(true);
+                    newBuildIssues.addIssue(issueToAdd);
+                }
+            }
+        }
     }
 
     @Override
@@ -376,10 +431,11 @@ public class BuildServiceImpl implements InternalBuildService {
     }
 
     @Override
-    public
-    @Nullable
-    Build getLatestBuildByNameAndStatus(String buildName, final String buildStatus) {
+    public Build getLatestBuildByNameAndStatus(String buildName, final String buildStatus) {
         if (StringUtils.isBlank(buildName)) {
+            return null;
+        }
+        if (StringUtils.isBlank(buildStatus)) {
             return null;
         }
         //let's find all builds
@@ -394,12 +450,11 @@ public class BuildServiceImpl implements InternalBuildService {
         if (buildStatus.equals(LATEST_BUILD)) {
             latestBuildRun = getLast(buildRuns, null);
         } else {
-            latestBuildRun = getLast(filter(buildRuns, new Predicate<BuildRun>() { //filter by required status
+            latestBuildRun = getLast(filter(buildRuns, new Predicate<BuildRun>() {
                 @Override
                 public boolean apply(BuildRun buildRun) {
-                    //the only one we support right now is LAST_RELEASED i.e. "Released"
-                    return LAST_RELEASED_BUILD.equals(buildStatus) && PromotionStatus.RELEASED.equals(
-                            buildRun.getReleaseStatus());
+                    // Search for the latest build by the given status
+                    return buildStatus.equals(buildRun.getReleaseStatus());
                 }
             }), null);
 
@@ -440,6 +495,26 @@ public class BuildServiceImpl implements InternalBuildService {
     @Override
     public Set<BuildRun> searchBuildsByName(String buildName) {
         return getTransactionalMe().transactionalSearchBuildsByName(buildName);
+    }
+
+    @Override
+    public List<BuildRun> getAllPreviousBuilds(String buildName, String buildNumber, String buildStarted) {
+        final BuildRun currentBuildRun = getTransactionalMe().getBuildRun(buildName, buildNumber, buildStarted);
+        Set<BuildRun> buildRuns = searchBuildsByName(buildName);
+        final BuildNumberComparator buildNumberComparator = new BuildNumberComparator();
+        Iterables.removeIf(buildRuns, new Predicate<BuildRun>() {
+            @Override
+            public boolean apply(@Nullable BuildRun input) {
+                // Remove all builds equals or after the current one
+                return buildNumberComparator.compare(currentBuildRun, input) <= 0;
+            }
+        });
+
+        List<BuildRun> buildRunsList = Lists.newArrayList(buildRuns);
+        Comparator<BuildRun> reverseComparator = Collections.reverseOrder(buildNumberComparator);
+        Collections.sort(buildRunsList, reverseComparator);
+
+        return buildRunsList;
     }
 
     @Override

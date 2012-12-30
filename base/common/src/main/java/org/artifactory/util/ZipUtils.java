@@ -18,26 +18,35 @@
 
 package org.artifactory.util;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.ArchiveInputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
+import org.artifactory.api.archive.ArchiveType;
+import org.artifactory.common.ConstantValues;
 import org.artifactory.log.LoggerFactory;
 import org.slf4j.Logger;
 
-import java.io.BufferedOutputStream;
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 /**
  * A utility class to perform different archive related actions
@@ -45,63 +54,21 @@ import java.util.zip.ZipOutputStream;
  * @author Noam Tenne
  */
 public abstract class ZipUtils {
-
     private static final Logger log = LoggerFactory.getLogger(ZipUtils.class);
 
     /**
-     * Archives the contents of the given directory into the given archive using the java.util.zip tools
+     * Archives the contents of the given directory into the given archive using the apache commons compress tools
      *
      * @param sourceDirectory    Directory to archive
      * @param destinationArchive Archive file to create
      * @param recurse            True if should recurse file scan of source directory. False if not
      * @throws IOException              Any exceptions that might occur while handling the given files and used streams
      * @throws IllegalArgumentException Thrown when given invalid destinations
+     * @see ArchiveUtils#archive(java.io.File, java.io.File, boolean, org.artifactory.api.archive.ArchiveType)
      */
     public static void archive(File sourceDirectory, File destinationArchive, boolean recurse)
             throws IOException {
-        if ((sourceDirectory == null) || (destinationArchive == null)) {
-            throw new IllegalArgumentException("Supplied destinations cannot be null.");
-        }
-        if (!sourceDirectory.isDirectory()) {
-            throw new IllegalArgumentException("Supplied source directory must be an existing directory.");
-        }
-        String sourcePath = sourceDirectory.getAbsolutePath();
-        String archivePath = destinationArchive.getAbsolutePath();
-        log.debug("Begining to archive '{}' into '{}'", sourcePath, archivePath);
-        FileOutputStream destinationOutputStream = new FileOutputStream(destinationArchive);
-        ZipOutputStream zipOutputStream = new ZipOutputStream(new BufferedOutputStream(destinationOutputStream));
-
-        try {
-            @SuppressWarnings({"unchecked"})
-            Collection<File> childrenFiles = org.apache.commons.io.FileUtils.listFiles(sourceDirectory, null, recurse);
-
-            ZipEntry zipEntry;
-            FileInputStream fileInputStream;
-            for (File childFile : childrenFiles) {
-                String childPath = childFile.getAbsolutePath();
-                String relativePath = childPath.substring((sourcePath.length() + 1), childPath.length());
-
-                /**
-                 * Need to convert separators to unix format since zipping on windows machines creates windows specific
-                 * FS file paths
-                 */
-                relativePath = FilenameUtils.separatorsToUnix(relativePath);
-                zipEntry = new ZipEntry(relativePath);
-                fileInputStream = new FileInputStream(childFile);
-                zipOutputStream.putNextEntry(zipEntry);
-
-                try {
-                    IOUtils.copy(fileInputStream, zipOutputStream);
-                } finally {
-                    IOUtils.closeQuietly(fileInputStream);
-                }
-                log.debug("Archive '{}' into '{}'", childPath, archivePath);
-            }
-        } finally {
-            IOUtils.closeQuietly(zipOutputStream);
-        }
-
-        log.debug("Completed archiving of '{}' into '{}'", sourcePath, archivePath);
+        ArchiveUtils.archive(sourceDirectory, destinationArchive, recurse, ArchiveType.ZIP);
     }
 
     /**
@@ -178,25 +145,72 @@ public abstract class ZipUtils {
      * @param destinationDirectory Directory to extract archive to
      */
     private static void extractFiles(File sourceArchive, File destinationDirectory) {
-        ZipInputStream zipInputStream = null;
+        ArchiveInputStream archiveInputStream = null;
         try {
-            zipInputStream = new ZipInputStream(new FileInputStream(sourceArchive));
-            ZipEntry zipEntry;
-
-            while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+            archiveInputStream = createArchiveInputStream(sourceArchive);
+            ArchiveEntry zipEntry;
+            while ((zipEntry = archiveInputStream.getNextEntry()) != null) {
                 //Validate entry name before extracting
                 String validatedEntryName = validateEntryName(zipEntry.getName());
 
                 if (StringUtils.isNotBlank(validatedEntryName)) {
-                    extractFile(sourceArchive, destinationDirectory, zipInputStream, validatedEntryName,
-                            new Date(zipEntry.getTime()), zipEntry.isDirectory());
+                    extractFile(sourceArchive, destinationDirectory, archiveInputStream, validatedEntryName,
+                            zipEntry.getLastModifiedDate(), zipEntry.isDirectory());
                 }
             }
 
         } catch (IOException ioe) {
             throw new RuntimeException("Error while extracting " + sourceArchive.getPath(), ioe);
         } finally {
-            IOUtils.closeQuietly(zipInputStream);
+            IOUtils.closeQuietly(archiveInputStream);
+        }
+    }
+
+    private static ArchiveInputStream createArchiveInputStream(File sourceArchive) throws IOException {
+        String fileName = sourceArchive.getName();
+        String extension = PathUtils.getExtension(fileName);
+        verifySupportedExtension(extension);
+        FileInputStream fis = new FileInputStream(sourceArchive);
+        if ("zip".equalsIgnoreCase(extension)) {
+            return new ZipArchiveInputStream(fis);
+        }
+
+        if ("tar".equalsIgnoreCase(extension)) {
+            return new TarArchiveInputStream(fis);
+        }
+
+        if ("gz".equalsIgnoreCase(extension) && fileName.endsWith("tar.gz")) {
+            return new TarArchiveInputStream(new GzipCompressorInputStream(fis));
+        }
+
+        if ("tgz".equalsIgnoreCase(extension)) {
+            return new TarArchiveInputStream(new GzipCompressorInputStream(fis));
+        }
+
+        throw new IllegalArgumentException("Unsupported archive extension: '" + extension + "'");
+    }
+
+    private static void verifySupportedExtension(String extension) {
+        Set<String> supportedExtensions = Sets.newHashSet();
+        try {
+            String supportedExtensionsNames = ConstantValues.requestExplodedArchiveExtensions.getString();
+            supportedExtensions = Sets.newHashSet(
+                    Iterables.transform(Sets.newHashSet(StringUtils.split(supportedExtensionsNames, ",")),
+                            new Function<String, String>() {
+                                @Override
+                                public String apply(@Nullable String input) {
+                                    String result = StringUtils.isBlank(input) ? input : StringUtils.trim(input);
+                                    return StringUtils.equals(result, "tar.gz") ? "gz" : result;
+                                }
+                            }
+                    )
+            );
+        } catch (Exception e) {
+            log.error("Failed to parse global default excludes. Using default values: " + e.getMessage());
+        }
+
+        if (StringUtils.isBlank(extension) || !supportedExtensions.contains(extension)) {
+            throw new IllegalArgumentException("Unsupported archive extension: '" + extension + "'");
         }
     }
 

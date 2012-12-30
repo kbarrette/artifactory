@@ -18,6 +18,7 @@
 
 package org.artifactory.webapp.wicket.page.build.actionable;
 
+import org.artifactory.api.build.diff.BuildsDiffStatus;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.mime.NamingUtils;
 import org.artifactory.repo.RepoPath;
@@ -36,6 +37,7 @@ import org.jfrog.build.api.Artifact;
 public class ModuleArtifactActionableItem extends RepoAwareActionableItemBase {
 
     private Artifact artifact;
+    private BuildsDiffStatus status = BuildsDiffStatus.UNCHANGED;
 
     /**
      * Main constructor
@@ -46,6 +48,14 @@ public class ModuleArtifactActionableItem extends RepoAwareActionableItemBase {
     public ModuleArtifactActionableItem(RepoPath repoPath, Artifact artifact) {
         super(repoPath);
         this.artifact = artifact;
+    }
+
+    public BuildsDiffStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(BuildsDiffStatus status) {
+        this.status = status;
     }
 
     @Override

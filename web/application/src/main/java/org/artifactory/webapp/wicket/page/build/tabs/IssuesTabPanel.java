@@ -20,7 +20,6 @@ package org.artifactory.webapp.wicket.page.build.tabs;
 
 import com.google.common.collect.Lists;
 import org.apache.wicket.extensions.markup.html.repeater.data.sort.SortOrder;
-import org.apache.wicket.extensions.markup.html.repeater.data.table.AbstractColumn;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.IColumn;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.PropertyColumn;
 import org.apache.wicket.extensions.markup.html.repeater.util.SortableDataProvider;
@@ -35,6 +34,7 @@ import org.apache.wicket.model.Model;
 import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.border.fieldset.FieldSetBorder;
 import org.artifactory.common.wicket.component.table.SortableTable;
+import org.artifactory.common.wicket.component.table.columns.BooleanColumn;
 import org.artifactory.common.wicket.util.ListPropertySorter;
 import org.jfrog.build.api.Build;
 import org.jfrog.build.api.Issue;
@@ -42,6 +42,7 @@ import org.jfrog.build.api.Issues;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author Noam Y. Tenne
@@ -60,7 +61,10 @@ public class IssuesTabPanel extends Panel {
         Issues issues = build.getIssues();
         List<Issue> affectedIssues = null;
         if (issues != null) {
-            affectedIssues = issues.getAffectedIssues();
+            Set<Issue> affectedIssuesSet = issues.getAffectedIssues();
+            if (affectedIssuesSet != null) {
+                affectedIssues = Lists.newArrayList(affectedIssuesSet);
+            }
         }
         if (affectedIssues == null) {
             affectedIssues = Lists.newArrayList();
@@ -72,7 +76,7 @@ public class IssuesTabPanel extends Panel {
         }
 
         List<IColumn<Issue>> columns = Lists.newArrayList();
-        columns.add(new AbstractColumn<Issue>(Model.of("Key"), "key") {
+        columns.add(new PropertyColumn<Issue>(Model.of("Key"), "key") {
             @Override
             public void populateItem(Item cellItem, String componentId, IModel rowModel) {
                 final Issue issue = (Issue) cellItem.getParent().getParent().getDefaultModelObject();
@@ -83,10 +87,14 @@ public class IssuesTabPanel extends Panel {
                         tag.put("onclick", "window.open('" + issue.getUrl() + "', '_blank')");
                     }
                 };
+                if (!issue.isAggregated()) {
+                    link.add(new CssClass("bold-listed-label"));
+                }
                 cellItem.add(link.add(new CssClass("item-link")));
             }
         });
         columns.add(new PropertyColumn<Issue>(Model.of("Summary"), "summary"));
+        columns.add(new BooleanColumn<Issue>(Model.of("Previous Build"), "aggregated"));
 
         IssueDataProvider dataProvider = new IssueDataProvider(affectedIssues);
 
@@ -103,7 +111,7 @@ public class IssuesTabPanel extends Panel {
          * @param affectedIssues Modules to display
          */
         public IssueDataProvider(List<Issue> affectedIssues) {
-            setSort("key", SortOrder.ASCENDING);
+            setSort("aggregated", SortOrder.ASCENDING);
             issueList = (affectedIssues != null) ? affectedIssues : Lists.<Issue>newArrayList();
         }
 

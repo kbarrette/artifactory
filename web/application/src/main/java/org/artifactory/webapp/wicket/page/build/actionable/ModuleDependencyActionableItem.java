@@ -18,6 +18,7 @@
 
 package org.artifactory.webapp.wicket.page.build.actionable;
 
+import org.artifactory.api.build.diff.BuildsDiffStatus;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.util.CollectionUtils;
@@ -37,16 +38,27 @@ import java.util.List;
 public class ModuleDependencyActionableItem extends RepoAwareActionableItemBase {
 
     private Dependency dependency;
+    private BuildsDiffStatus status = BuildsDiffStatus.UNCHANGED;
 
     /**
      * Main constructor
      *
      * @param repoPath   Repo path of dependency
      * @param dependency Dependency object
+     * @param status     The status of the dependency
      */
-    public ModuleDependencyActionableItem(RepoPath repoPath, Dependency dependency) {
+    public ModuleDependencyActionableItem(RepoPath repoPath, Dependency dependency, BuildsDiffStatus status) {
         super(repoPath);
         this.dependency = dependency;
+        this.status = status;
+    }
+
+    public BuildsDiffStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(BuildsDiffStatus status) {
+        this.status = status;
     }
 
     @Override

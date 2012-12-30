@@ -18,8 +18,8 @@
 
 package org.artifactory.rest.resource.search.types;
 
-import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.lang.StringUtils;
+import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.rest.constant.SearchRestConstants;
 import org.artifactory.api.rest.search.result.InfoRestSearchResult;
 import org.artifactory.api.search.ItemSearchResults;
@@ -28,7 +28,10 @@ import org.artifactory.api.search.SearchService;
 import org.artifactory.api.search.xml.metadata.MetadataSearchControls;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.common.ConstantValues;
+import org.artifactory.fs.FileInfo;
+import org.artifactory.fs.ItemInfo;
 import org.artifactory.rest.common.list.StringList;
+import org.artifactory.rest.util.FileStorageInfoHelper;
 import org.artifactory.rest.util.RestUtils;
 import org.artifactory.sapi.common.RepositoryRuntimeException;
 
@@ -52,17 +55,20 @@ public class XpathSearchResource {
     private AuthorizationService authorizationService;
     private SearchService searchService;
     private HttpServletResponse response;
+    private RepositoryService repositoryService;
     private HttpServletRequest request;
 
     /**
      * @param authorizationService
      * @param searchService        Search service instance
+     * @param repositoryService
+     * @param uriInfo
      */
     public XpathSearchResource(AuthorizationService authorizationService, SearchService searchService,
-            HttpServletRequest request,
-            HttpServletResponse response) {
+            RepositoryService repositoryService, HttpServletRequest request, HttpServletResponse response) {
         this.authorizationService = authorizationService;
         this.searchService = searchService;
+        this.repositoryService = repositoryService;
         this.request = request;
         this.response = response;
     }
@@ -141,16 +147,16 @@ public class XpathSearchResource {
         }
 
         List results = searchResults.getResults();
-        if (!results.isEmpty()) {
-            InfoRestSearchResult infoRestSearchResult = new InfoRestSearchResult();
-            for (Object result : results) {
-                String uri = RestUtils.buildStorageInfoUri(request, (SearchResultBase) result);
-                infoRestSearchResult.results.add(new InfoRestSearchResult.SearchEntry(uri));
+        InfoRestSearchResult infoRestSearchResult = new InfoRestSearchResult();
+        for (Object result : results) {
+            ItemInfo itemInfo = ((SearchResultBase) result).getItemInfo();
+            if (!itemInfo.isFolder()) {
+                FileStorageInfoHelper fileStorageInfoHelper = new FileStorageInfoHelper(request, repositoryService,
+                        (FileInfo) itemInfo);
+                infoRestSearchResult.results.add(fileStorageInfoHelper.createFileInfoData());
             }
-            return Response.ok(infoRestSearchResult).build();
         }
-
-        return Response.status(HttpStatus.SC_NOT_FOUND).build();
+        return Response.ok(infoRestSearchResult).build();
     }
 
 }

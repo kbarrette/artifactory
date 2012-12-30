@@ -191,8 +191,14 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
             updateFileInfoFromImportedFile(file, mutableFileInfo);
             setMetadata(StatsInfo.class, InfoFactoryHolder.get().createStats());
 
+            boolean metadataImported = false;
             if (settings.isIncludeMetadata()) {
-                importMetadata(file, status, settings);
+                metadataImported = importMetadata(file, status, settings);
+            }
+
+            // Couldn't import metadata, try to import checksums from files (FILENAME.md5, FILENAME.sha1)
+            if (!metadataImported) {
+                uploadOriginalChecksums(file);
             }
 
             // trust server checksums if the settings said so and client checksum is missing
@@ -237,6 +243,49 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         }
     }
 
+    private void uploadOriginalChecksums(File file) throws IOException {
+        String md5 = getOriginalChecksumFromFile(file, ChecksumType.md5);
+        if (StringUtils.isNotBlank(md5)) {
+            updateOriginalChecksumInfo(ChecksumType.md5, md5);
+        }
+
+        String sha1 = getOriginalChecksumFromFile(file, ChecksumType.sha1);
+        if (StringUtils.isNotBlank(sha1)) {
+            updateOriginalChecksumInfo(ChecksumType.sha1, sha1);
+        }
+    }
+
+    private String getOriginalChecksumFromFile(File artifactFile, ChecksumType checksumType) throws IOException {
+        File checksumFile = new File(artifactFile.getParent(), getName() + checksumType.ext());
+        InputStream is = null;
+        try {
+            is = new BufferedInputStream(new FileInputStream(checksumFile));
+            return Checksum.checksumStringFromStream(is);
+        } catch (FileNotFoundException e) {
+            log.warn("Couldn't find '{}' checksum file and Artifactory metadata doesn't exist.",
+                    checksumFile.getName());
+        } finally {
+            IOUtils.closeQuietly(is);
+        }
+
+        return null;
+    }
+
+    private void updateOriginalChecksumInfo(ChecksumType checksumType, String checksumValue) {
+        ChecksumsInfo checksums = getInfo().getChecksumsInfo();
+        if (!checksumType.isValid(checksumValue)) {
+            log.warn("Uploading non valid original checksum for {}", getRepoPath());
+        }
+
+        ChecksumInfo checksumInfo = checksums.getChecksumInfo(checksumType);
+        if (checksumInfo == null) {
+            checksumInfo = new ChecksumInfo(checksumType, checksumValue, null);
+        } else {
+            checksumInfo = new ChecksumInfo(checksumType, checksumValue, checksumInfo.getActual());
+        }
+        checksums.addChecksumInfo(checksumInfo);
+    }
+
     private void updateFileInfoFromImportedFile(File file, MutableFileInfo mutableFileInfo) {
         mutableFileInfo.setLastModified(file.lastModified());
         mutableFileInfo.setLastUpdated(System.currentTimeMillis());
@@ -264,16 +313,22 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         }
     }
 
-    public void updateDownloadStats() {
+    public boolean updateDownloadStats() {
+        if (!getRepo().isReal() || !ConstantValues.downloadStatsEnabled.getBoolean()) {
+            return false;
+        }
         if (log.isTraceEnabled()) {
             log.trace("Adding +1 download count to " + getRepoPath() + " from " + Thread.currentThread().getName());
         }
         BlockingQueue<StatsInfo> localDownloads = getOrCreateDownloads();
+        // If not in write lock on the file and first to download => send mark for commit
+        boolean sendMarkForCommit = !isMutable() && localDownloads.isEmpty();
         MutableStatsInfo statsInfo = InfoFactoryHolder.get().createStats();
         statsInfo.setDownloadCount(1);
         statsInfo.setLastDownloaded(System.currentTimeMillis());
         statsInfo.setLastDownloadedBy(getAuthorizationService().currentUsername());
         localDownloads.add(statsInfo);
+        return sendMarkForCommit;
     }
 
     /**
@@ -316,7 +371,10 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         }
         saveDirtyState();
         log.trace("Creating '{}' at {}.", getRepoPath(), new Date(getCreated()));
-        return new JcrFile(getNode(), getRepo(), this);
+        JcrFile immutableJcrFile = new JcrFile(getNode(), getRepo(), this);
+        // Now the immutable download queue will be reused, The locked version should stop seeing new downloads
+        this.downloads = null;
+        return immutableJcrFile;
     }
 
     @Override
@@ -368,7 +426,7 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         status.setDebug("Exporting file '" + getRelativePath() + "'...", log);
         File targetFile = new File(settings.getBaseDir(), getRelativePath());
         try {
-            //Invoke the callback if exists
+            // Invoke the callback if exists
             settings.executeCallbacks(
                     new FileExportInfoImpl(getInfo(), targetFile, FileExportInfo.FileExportStatus.PENDING),
                     FileExportEvent.BEFORE_FILE_EXPORT);
@@ -377,14 +435,17 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
             if (!parentFile.exists()) {
                 FileUtils.forceMkdir(parentFile);
             }
-
-            final boolean skipped = exportFileContent(targetFile, settings);
-
+            // Export file only if "incremental export" and the file to export is newer than the target file.
+            boolean skipFileContentExport = isSkipFileContentExport(targetFile, settings);
+            if (!skipFileContentExport) {
+                exportFileContent(targetFile);
+            }
             settings.executeCallbacks(
                     new FileExportInfoImpl(
                             getInfo(),
                             targetFile,
-                            skipped ? FileExportInfo.FileExportStatus.SKIPPED : FileExportInfo.FileExportStatus.ADDED),
+                            skipFileContentExport ? FileExportInfo.FileExportStatus.SKIPPED :
+                                    FileExportInfo.FileExportStatus.ADDED),
                     FileExportEvent.AFTER_FILE_EXPORT);
 
             if (settings.isIncludeMetadata()) {
@@ -405,14 +466,7 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         }
     }
 
-    private boolean exportFileContent(File targetFile, ExportSettings settings) throws IOException {
-        if (settings.isIncremental() && targetFile.exists()) {
-            // incremental export - only export the file if it is newer
-            if (getInfo().getLastModified() <= targetFile.lastModified()) {
-                log.debug("Skipping not modified file {}", getPath());
-                return true;
-            }
-        }
+    private void exportFileContent(File targetFile) throws IOException {
         log.debug("Exporting file content to {}", targetFile.getAbsolutePath());
         OutputStream os = null;
         InputStream is = null;
@@ -432,6 +486,19 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
 
         if (getLastModified() >= 0) {
             targetFile.setLastModified(getLastModified());
+        }
+    }
+
+    private boolean isSkipFileContentExport(File targetFile, ExportSettings settings) {
+        if (settings.isExcludeContent()) {
+            return true;
+        }
+        if (settings.isIncremental() && targetFile.exists()) {
+            // incremental export - only export the file if it is newer
+            if (getInfo().getLastModified() <= targetFile.lastModified()) {
+                log.debug("Skipping not modified file {}", getPath());
+                return true;
+            }
         }
         return false;
     }
@@ -578,14 +645,16 @@ public class JcrFile extends JcrFsItem<FileInfo, MutableFileInfo> implements Vfs
         log.debug("Calculating checksums of '{}'.", getRepoPath());
         Checksum[] checksums = JcrVfsHelper.getChecksumsToCompute();
         ChecksumInputStream checksumInputStream = new ChecksumInputStream(in, checksums);
+        try {
+            //Do this after xml import: since Jackrabbit 1.4
+            //org.apache.jackrabbit.core.value.BLOBInTempFile.BLOBInTempFile will close the stream
+            Binary binary = resourceNode.getSession().getValueFactory().createBinary(checksumInputStream);
+            resourceNode.setProperty(JCR_DATA, binary);
+        } finally {
+            // make sure the stream is closed. Jackrabbit doesn't close the stream if the file is small (violating the contract)
+            IOUtils.closeQuietly(checksumInputStream);  // if close is failed we'll fail in setting the checksums
+        }
 
-        //Do this after xml import: since Jackrabbit 1.4
-        //org.apache.jackrabbit.core.value.BLOBInTempFile.BLOBInTempFile will close the stream
-        Binary binary = resourceNode.getSession().getValueFactory().createBinary(checksumInputStream);
-        resourceNode.setProperty(JCR_DATA, binary);
-
-        // make sure the stream is closed. Jackrabbit doesn't close the stream if the file is small (violating the contract)
-        IOUtils.closeQuietly(checksumInputStream);  // if close is failed we'll fail in setting the checksums
         if (log.isTraceEnabled()) {
             StringBuilder sb = new StringBuilder();
             for (Checksum checksum : checksums) {

@@ -33,6 +33,8 @@ import org.apache.wicket.model.Model;
 import org.artifactory.addon.wicket.NuGetWebAddon;
 import org.artifactory.addon.wicket.PropertiesWebAddon;
 import org.artifactory.addon.wicket.ReplicationWebAddon;
+import org.artifactory.api.bintray.BintrayService;
+import org.artifactory.api.context.ContextHelper;
 import org.artifactory.common.wicket.behavior.CssClass;
 import org.artifactory.common.wicket.component.CreateUpdateAction;
 import org.artifactory.common.wicket.component.links.TitledAjaxSubmitLink;
@@ -48,6 +50,7 @@ import org.artifactory.util.PathUtils;
 import org.artifactory.webapp.wicket.page.config.repos.CachingDescriptorHelper;
 import org.artifactory.webapp.wicket.page.config.repos.RepoConfigCreateUpdatePanel;
 import org.artifactory.webapp.wicket.panel.tabbed.tab.BaseTab;
+import org.artifactory.webapp.wicket.util.CronUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -124,11 +127,13 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
     public void addAndSaveDescriptor(HttpRepoDescriptor repoDescriptor) {
         CachingDescriptorHelper helper = getCachingDescriptorHelper();
         MutableCentralConfigDescriptor mccd = helper.getModelMutableDescriptor();
-        repoDescriptor.setKey(key);
+        if (StringUtils.isBlank(repoDescriptor.getP2OriginalUrl())) {
+            repoDescriptor.setP2OriginalUrl(getUrlWithoutSubpath(repoDescriptor.getUrl()));
+        }
         mccd.addRemoteRepository(repoDescriptor);
         if (replicationDescriptor.isEnabled()) {
             if (StringUtils.isBlank(replicationDescriptor.getRepoKey())) {
-                replicationDescriptor.setRepoKey(key);
+                replicationDescriptor.setRepoKey(repoDescriptor.getKey());
             }
             mccd.addRemoteReplication(replicationDescriptor);
         }
@@ -142,15 +147,28 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
         //update the model being saved
         Map<String, RemoteRepoDescriptor> remoteRepositoriesMap = mccd.getRemoteRepositoriesMap();
         if (remoteRepositoriesMap.containsKey(repoDescriptor.getKey())) {
+            if (StringUtils.isBlank(repoDescriptor.getP2OriginalUrl())) {
+                RemoteRepoDescriptor oldDescriptor = helper.getSavedMutableDescriptor().getRemoteRepositoriesMap().get(
+                        repoDescriptor.getKey());
+                if (oldDescriptor != null) {
+                    repoDescriptor.setP2OriginalUrl(getUrlWithoutSubpath(oldDescriptor.getUrl()));
+                }
+            }
             remoteRepositoriesMap.put(repoDescriptor.getKey(), repoDescriptor);
         }
         if (replicationDescriptor.isEnabled() && !mccd.isRemoteReplicationExists(replicationDescriptor)) {
             if (StringUtils.isBlank(replicationDescriptor.getRepoKey())) {
-                replicationDescriptor.setRepoKey(key);
+                replicationDescriptor.setRepoKey(repoDescriptor.getKey());
             }
             mccd.addRemoteReplication(replicationDescriptor);
         }
         helper.syncAndSaveRemoteRepositories();
+    }
+
+    private String getUrlWithoutSubpath(String url) {
+        int slashslash = url.indexOf("//") + 2;
+        int nextSlash = url.indexOf('/', slashslash);
+        return nextSlash < 0 ? url : PathUtils.trimSlashes(url.substring(0, nextSlash)).toString();
     }
 
     @Override
@@ -158,8 +176,23 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
         boolean urlValid = StringUtils.isNotEmpty(repoDescriptor.getUrl());
         if (!urlValid) {
             error("Field 'Url' is required.");
+            return false;
         }
-        return urlValid;
+
+        if (repoDescriptor.getSocketTimeoutMillis() < 0) {
+            error("Socket Timeout must be positive or zero.");
+            return false;
+        }
+
+        if (replicationDescriptor != null && replicationDescriptor.isEnabled()) {
+            String cronExp = replicationDescriptor.getCronExp();
+            if (StringUtils.isBlank(cronExp) || !CronUtils.isValid(cronExp)) {
+                error("Invalid cron expression");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Override
@@ -173,13 +206,15 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
                     return;
                 }
                 // always test with url trailing slash
-                String url = PathUtils.addTrailingSlash(repo.getUrl());
+                String originalUrl = PathUtils.addTrailingSlash(repo.getUrl());
+                String transformedUrl = ContextHelper.get().beanForType(BintrayService.class).getBintrayTestRepoUrl(
+                        originalUrl);
                 NuGetWebAddon nuGetWebAddon = addons.addonByType(NuGetWebAddon.class);
-                HttpMethodBase testMethod = nuGetWebAddon.getRemoteRepoTestMethod(url, repo);
+                HttpMethodBase testMethod = nuGetWebAddon.getRemoteRepoTestMethod(transformedUrl, repo);
                 HttpClient client = new HttpClientConfigurator()
-                        .hostFromUrl(url)
-                        .defaultMaxConnectionsPerHost(5)
-                        .maxTotalConnections(5)
+                        .hostFromUrl(transformedUrl)
+                                //.defaultMaxConnectionsPerHost(5)
+                                //.maxTotalConnections(5)
                         .connectionTimeout(repo.getSocketTimeoutMillis())
                         .soTimeout(repo.getSocketTimeoutMillis())
                         .staleCheckingEnabled(true)
@@ -198,16 +233,16 @@ public class HttpRepoPanel extends RepoConfigCreateUpdatePanel<HttpRepoDescripto
                     }
                 } catch (UnknownHostException e) {
                     error("Unknown host: " + e.getMessage());
-                    log.debug("Test connection to '" + url + "' failed with exception", e);
+                    log.debug("Test connection to '" + originalUrl + "' failed with exception", e);
                 } catch (ConnectException e) {
                     error(e.getMessage());
-                    log.debug("Test connection to '" + url + "' failed with exception", e);
+                    log.debug("Test connection to '" + originalUrl + "' failed with exception", e);
                 } catch (IOException e) {
                     error("Connection failed with exception: " + e.getMessage());
-                    log.debug("Test connection to '" + url + "' failed with exception", e);
+                    log.debug("Test connection to '" + originalUrl + "' failed with exception", e);
                 } catch (Exception e) {
                     error("Connection failed with general exception: " + e.getMessage());
-                    log.debug("Test connection to '" + url + "' failed with exception", e);
+                    log.debug("Test connection to '" + originalUrl + "' failed with exception", e);
                 } finally {
                     testMethod.releaseConnection();
                 }

@@ -28,6 +28,7 @@ import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.artifactory.addon.AddonsManager;
 import org.artifactory.addon.FilteredResourcesAddon;
 import org.artifactory.addon.PropertiesAddon;
+import org.artifactory.addon.RestCoreAddon;
 import org.artifactory.api.common.BasicStatusHolder;
 import org.artifactory.api.common.MultiStatusHolder;
 import org.artifactory.api.context.ContextHelper;
@@ -52,6 +53,7 @@ import org.artifactory.fs.MutableFileInfo;
 import org.artifactory.fs.MutableItemInfo;
 import org.artifactory.fs.RepoResource;
 import org.artifactory.fs.StatsInfo;
+import org.artifactory.fs.ZipEntryRepoResource;
 import org.artifactory.io.SimpleResourceStreamHandle;
 import org.artifactory.io.StringResourceStreamHandle;
 import org.artifactory.io.checksum.policy.ChecksumPolicy;
@@ -84,11 +86,10 @@ import org.artifactory.repo.interceptor.StorageInterceptors;
 import org.artifactory.repo.jcr.cache.expirable.CacheExpiry;
 import org.artifactory.repo.jcr.local.LocalNonCacheOverridable;
 import org.artifactory.repo.service.InternalRepositoryService;
-import org.artifactory.repo.snapshot.LocalLatestMavenSnapshotResolver;
 import org.artifactory.request.InternalRequestContext;
+import org.artifactory.request.RepoRequests;
 import org.artifactory.request.Request;
 import org.artifactory.request.RequestContext;
-import org.artifactory.request.RequestTraceLogger;
 import org.artifactory.resource.FileResource;
 import org.artifactory.resource.MetadataResource;
 import org.artifactory.resource.MutableRepoResourceInfo;
@@ -103,7 +104,6 @@ import org.artifactory.security.AccessLogger;
 import org.artifactory.spring.InternalArtifactoryContext;
 import org.artifactory.spring.InternalContextHelper;
 import org.artifactory.storage.StorageConstants;
-import org.artifactory.traffic.TrafficService;
 import org.artifactory.util.ExceptionUtils;
 import org.slf4j.Logger;
 
@@ -131,7 +131,6 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
     private StorageInterceptors interceptors;
     private JcrRepoService jcrRepoService;
     private JcrService jcrService;
-    private TrafficService trafficService;
     private AddonsManager addonsManager;
 
     private RepoPath rootRepoPath;
@@ -156,7 +155,6 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
         this.interceptors = context.beanForType(StorageInterceptors.class);
         this.jcrRepoService = context.getJcrRepoService();
         this.jcrService = context.getJcrService();
-        this.trafficService = context.beanForType(TrafficService.class);
         addonsManager = context.beanForType(AddonsManager.class);
 
         //init caches
@@ -366,12 +364,13 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
      */
     @Override
     public RepoResource getInfo(InternalRequestContext context) throws FileExpectedException {
-        context = new LocalLatestMavenSnapshotResolver().convertNonUniqueSnapshotPath(this, context);
+        RestCoreAddon restCoreAddon = addonsManager.addonByType(RestCoreAddon.class);
+        context = restCoreAddon.getDynamicVersionContext(this, context, false);
         String path = context.getResourcePath();
         RepoPath repoPath = InternalRepoPathFactory.create(getKey(), path);
         JcrFsItem<?, ?> item = getPathItem(repoPath);
         if (item == null) {
-            RequestTraceLogger.log("Unable to find resource in %s", repoPath);
+            RepoRequests.logToContext("Unable to find resource in %s", repoPath);
             return new UnfoundRepoResource(repoPath, "File not found.");
         }
         RepoResource localRes;
@@ -379,19 +378,19 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
             //When requesting a property/metadata return a special resource class that contains the parent node
             //path and the metadata name.
             String metadataName = NamingUtils.getMetadataName(path);
-            RequestTraceLogger.log("Identified resource as metadata '%s'", metadataName);
+            RepoRequests.logToContext("Identified resource as metadata '%s'", metadataName);
             MetadataDefinition definition;
             try {
                 definition = InternalContextHelper.get().getMetadataDefinitionService()
                         .getMetadataDefinition(metadataName, true);
             } catch (IllegalNameException e) {
-                RequestTraceLogger.log("Error occurred while retrieving metadata definition - " +
+                RepoRequests.logToContext("Error occurred while retrieving metadata definition - " +
                         "returning unfound resource: %s", e.getMessage());
                 return new UnfoundRepoResource(repoPath, e.getMessage());
             }
             MetadataInfo info = definition.getPersistenceHandler().getMetadataInfo(item);
             if (info == null) {
-                RequestTraceLogger.log("Unable to retrieve metadata info - returning unfound resource");
+                RepoRequests.logToContext("Unable to retrieve metadata info - returning unfound resource");
                 return new UnfoundRepoResource(repoPath, "metadata " + " not found for " + item);
             }
 
@@ -402,22 +401,22 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
             }
         } else {
             if (item.isDirectory()) {
-                RequestTraceLogger.log("Identified resource as a directory - throwing file expected exception");
+                RepoRequests.logToContext("Identified resource as a directory - throwing file expected exception");
                 throw new FileExpectedException(repoPath);
             }
-            RequestTraceLogger.log("Identified resource as a file");
+            RepoRequests.logToContext("Identified resource as a file");
             //Handle query-aware get
             Properties queryProperties = context.getProperties();
             boolean exactMatch = true;
             if (!queryProperties.isEmpty()) {
-                RequestTraceLogger.log("Request includes query properties");
+                RepoRequests.logToContext("Request includes query properties");
                 Properties properties = item.getMetadata(Properties.class);
                 Properties.MatchResult matchResult = properties.matchQuery(queryProperties);
                 if (matchResult == Properties.MatchResult.NO_MATCH) {
                     exactMatch = false;
-                    RequestTraceLogger.log("Request query properties don't match those that annotate the artifact");
+                    RepoRequests.logToContext("Request query properties don't match those that annotate the artifact");
                 } else if (matchResult == Properties.MatchResult.CONFLICT) {
-                    RequestTraceLogger.log("Request query properties conflict with those that annotate the " +
+                    RepoRequests.logToContext("Request query properties conflict with those that annotate the " +
                             "artifact - returning unfound resource");
                     return new UnfoundRepoResource(repoPath, "File '" + repoPath +
                             "' was found, but mandatory properties do not match.");
@@ -431,7 +430,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
             }
         }
         //Release the read lock early
-        RequestTraceLogger.log("Releasing the read lock from the resource");
+        RepoRequests.logToContext("Releasing the read lock from the resource");
         RepoPath lockedRepoPath = NamingUtils.getLockingTargetRepoPath(repoPath);
         LockingHelper.releaseReadLock(lockedRepoPath);
         return localRes;
@@ -440,58 +439,55 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
     @Override
     public ResourceStreamHandle getResourceStreamHandle(InternalRequestContext requestContext, final RepoResource res)
             throws IOException, RepositoryException {
-        RequestTraceLogger.log("Creating a resource handle from '%s'", res.getResponseRepoPath().getRepoKey());
+        RepoRequests.logToContext("Creating a resource handle from '%s'", res.getResponseRepoPath().getRepoKey());
         String relPath = res.getRepoPath().getPath();
         //If we are dealing with metadata will return the md container item
         JcrFsItem item = getLocalJcrFsItem(relPath);
         //If resource does not exist throw an IOException
         if (item == null) {
-            RequestTraceLogger.log("Unable to find the resource - throwing exception");
-            throw new IOException("Could not get resource stream. Path not found: " + res + ".");
+            RepoRequests.logToContext("Unable to find the resource - throwing exception");
+            throw new IOException("Could not get resource stream. Path '" + relPath + "' not found in " + this);
         }
         if (item.isDeleted() || !item.exists()) {
-            RequestTraceLogger.log("Requested resource was deleted - throwing exception");
+            RepoRequests.logToContext("Requested resource was deleted - throwing exception");
             item.setDeleted(true);
             throw new IOException("Could not get resource stream. Item " + item + " was deleted!");
         }
         ResourceStreamHandle handle;
         if (res.isMetadata()) {
             String metadataName = res.getInfo().getName();
-            RequestTraceLogger.log("Identified requested resource as metadata of type '%s'", metadataName);
+            RepoRequests.logToContext("Identified requested resource as metadata of type '%s'", metadataName);
             String xmlMetadata = item.getXmlMetadata(metadataName);
             if (xmlMetadata == null) {
-                RequestTraceLogger.log("Unable to find the metadata content - throwing exception");
+                RepoRequests.logToContext("Unable to find the metadata content - throwing exception");
                 throw new IOException("Could not get resource stream. Stream not found: " + res + ".");
             } else {
-                RequestTraceLogger.log("Resolved metadata content - using a string resource handle");
+                RepoRequests.logToContext("Resolved metadata content - using a string resource handle");
                 handle = new StringResourceStreamHandle(xmlMetadata);
             }
         } else if (item.isFile()) {
-            RequestTraceLogger.log("Identified requested resource as a file");
+            RepoRequests.logToContext("Identified requested resource as a file");
             JcrFile jcrFile = (JcrFile) item;
             final InputStream is = jcrFile.getStream();
             //Update the stats queue counter
-            jcrFile.updateDownloadStats();
-            //Send the async event to save the stats
-
-            RepoPath responsePath = res.getRepoPath();
-            if (getRepositoryService().virtualRepositoryByKey(responsePath.getRepoKey()) == null) {
-                getRepositoryService().markForSaveOnCommit(responsePath);
+            if (jcrFile.updateDownloadStats() && !willOrIsWriteLocked(jcrFile.getRepoPath())) {
+                //Send the async event to save the stats
+                getRepositoryService().markForSaveOnCommit(jcrFile.getRepoPath());
             }
 
             Request request = requestContext.getRequest();
-            if (request != null && request.isZipResourceRequest()) {
-                RequestTraceLogger.log("Requested resource is contained within an archive - " +
+            if (request != null && request.isZipResourceRequest() && (res instanceof ZipEntryRepoResource)) {
+                RepoRequests.logToContext("Requested resource is contained within an archive - " +
                         "using specialized handle");
                 handle = addonsManager.addonByType(FilteredResourcesAddon.class).getZipResourceHandle(res, is);
             } else {
-                RequestTraceLogger.log("Requested resource is an ordinary artifact - " +
+                RepoRequests.logToContext("Requested resource is an ordinary artifact - " +
                         "using normal content handle with length '%s'", jcrFile.getSize());
                 handle = new SimpleResourceStreamHandle(is, jcrFile.getSize());
             }
 
         } else {
-            RequestTraceLogger.log("Identified requested resource as a folder - throwing exception");
+            RepoRequests.logToContext("Identified requested resource as a folder - throwing exception");
             throw new IOException("Could not get resource stream from a folder " + res + ".");
         }
         return handle;
@@ -526,7 +522,8 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
         if (checksumType == null) {
             throw new IllegalArgumentException("Checksum type not found for path " + checksumFileUrl);
         }
-        return getChecksumPolicy().getChecksum(checksumType, resource.getInfo().getChecksums(), resource.getRepoPath());
+        return getChecksumPolicy().getChecksum(checksumType, resource.getInfo().getChecksums(),
+                resource.getRepoPath());
     }
 
     @Override
@@ -644,16 +641,11 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
 
                 setArtifactActualChecksums(res, jcrFile, artifactNonUniqueSnapshot, existingChecksumsToCompare);
 
-                //Save properties
-                Properties properties = context.getProperties();
-                if (properties != null) {
-                    jcrFile.setMetadata(Properties.class, properties);
-                }
-
                 //Add default stats
                 jcrFile.setMetadata(StatsInfo.class, InfoFactoryHolder.get().createStats());
                 updateResourceSize(res, jcrFile.getSize());
                 createJcrFile(res, jcrFile);
+                saveProperties(context, jcrFile);
             }
             return res;
         } catch (Exception e) {
@@ -666,13 +658,35 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
             //Unwrap any IOException and throw it
             Throwable ioCause = ExceptionUtils.getCauseOfTypes(e, IOException.class);
             if (ioCause != null) {
-                log.warn("IO error while trying to save resource {}'': {}",
-                        res.getRepoPath(), ioCause.getMessage());
+                log.warn("Could not save resource '{}': {}", res.getRepoPath(), ioCause.getMessage());
                 context.setException(ioCause);
                 throw (IOException) ioCause;
             }
             context.setException(e);
-            throw new RuntimeException("Failed to save resource '" + res.getRepoPath() + "'.", e);
+            throw new RuntimeException("Could not save resource '" + res.getRepoPath() + "'.", e);
+        }
+    }
+
+    private void saveProperties(SaveResourceContext context, JcrFile jcrFile) throws RepoRejectException {
+        Properties properties = context.getProperties();
+        if ((properties != null) && !properties.isEmpty()) {
+            BasicStatusHolder statusHolder = new BasicStatusHolder();
+            for (String key : properties.keys()) {
+                Set<String> values = properties.get(key);
+                String[] vals = (values != null) ? values.toArray(new String[values.size()]) : new String[]{};
+                interceptors.beforePropertyCreate(jcrFile, statusHolder, key, vals);
+            }
+            CancelException cancelException = statusHolder.getCancelException();
+            if (cancelException != null) {
+                LockingHelper.removeLockEntry(jcrFile.getRepoPath());
+                throw new RepoRejectException(cancelException);
+            }
+            jcrFile.setMetadata(Properties.class, properties);
+            for (String key : properties.keys()) {
+                Set<String> values = properties.get(key);
+                String[] vals = (values != null) ? values.toArray(new String[values.size()]) : new String[]{};
+                interceptors.afterPropertyCreate(jcrFile, statusHolder, key, vals);
+            }
         }
     }
 
@@ -1019,9 +1033,9 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
     }
 
     @Override
-    public boolean isWriteLocked(RepoPath path) {
+    public boolean willOrIsWriteLocked(RepoPath path) {
         MonitoringReadWriteLock lock = locks.get(path);
-        return lock != null && lock.isWriteLocked();
+        return lock != null && lock.willOrIsWriteLock();
     }
 
     @Override
@@ -1138,7 +1152,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
         if (request != null && file.getRepo().isReal()) {
             FilteredResourcesAddon filteredResourcesAddon = addonsManager.addonByType(FilteredResourcesAddon.class);
             if (filteredResourcesAddon.isFilteredResourceFile(repoPath)) {
-                RequestTraceLogger.log("Resource is marked as filtered - sending it through the engine");
+                RepoRequests.logToContext("Resource is marked as filtered - sending it through the engine");
                 InputStream stream = file.getStream();
                 try {
                     return filteredResourcesAddon.getFilteredResource(request, file.getInfo(), stream);
@@ -1149,7 +1163,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
         }
 
         if (request != null && request.isZipResourceRequest()) {
-            RequestTraceLogger.log("Resource is contained within an archiving - retrieving");
+            RepoRequests.logToContext("Resource is contained within an archiving - retrieving");
             InputStream stream = file.getStream();
             try {
                 return addonsManager.addonByType(FilteredResourcesAddon.class).getZipResource(
@@ -1170,7 +1184,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
     private RepoResource resolveMavenMetadataForCompatibility(JcrFsItem<?, ?> item, MetadataResource metadataResource,
             InternalRequestContext context) {
         if (ConstantValues.mvnMetadataVersion3Enabled.getBoolean() && !context.clientSupportsM3SnapshotVersions()) {
-            RequestTraceLogger.log("Use of v3 Maven metadata is enabled, but the requesting client doesn't " +
+            RepoRequests.logToContext("Use of v3 Maven metadata is enabled, but the requesting client doesn't " +
                     "support it - checking if the response should be modified for compatibility");
             MetadataInfo info = metadataResource.getInfo();
             MetadataDefinition metadataDefinition = InternalContextHelper.get().getMetadataDefinitionService()
@@ -1182,7 +1196,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
                 if (versioning != null) {
                     List<SnapshotVersion> snapshotVersions = versioning.getSnapshotVersions();
                     if ((snapshotVersions != null) && !snapshotVersions.isEmpty()) {
-                        RequestTraceLogger.log("Found snapshot versions - modifying the response for compatibility");
+                        RepoRequests.logToContext("Found snapshot versions - modifying the response for compatibility");
                         versioning.setSnapshotVersions(null);
                         return new ResolvedResource(metadataResource, MavenModelUtils.mavenMetadataToString(metadata));
                     }
@@ -1191,7 +1205,7 @@ public class StoringRepoMixin<T extends RepoDescriptor> implements StoringRepo<T
                 RepoPath repoPath = info.getRepoPath();
                 log.error("An error occurred while filtering Maven metadata '{}' for compatibility: " +
                         "{}\nReturning original content.", repoPath, e.getMessage());
-                RequestTraceLogger.log("An error occurred while filtering for compatibility. Returning the " +
+                RepoRequests.logToContext("An error occurred while filtering for compatibility. Returning the " +
                         "original content: %s", e.getMessage());
             }
         }

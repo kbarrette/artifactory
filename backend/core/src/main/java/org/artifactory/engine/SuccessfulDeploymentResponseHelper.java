@@ -53,7 +53,6 @@ public class SuccessfulDeploymentResponseHelper {
      * Writes the spec implementation response
      *
      * @param repoService Instance of repo service
-     * @param request
      * @param response    Response object
      * @param repoPath    Repo path of deployed artifact
      * @param url         Final reachable URI of deployed file
@@ -105,7 +104,7 @@ public class SuccessfulDeploymentResponseHelper {
         fileInfo.originalChecksums = getOriginalChecksums(checksumsInfo);
         fileInfo.path = "/" + repoPath.getPath();
         fileInfo.repo = repoPath.getRepoKey();
-        fileInfo.size = deployedInfo.getSize();
+        fileInfo.size = String.valueOf(deployedInfo.getSize());
         fileInfo.slf = url;
         return fileInfo;
     }
@@ -127,7 +126,7 @@ public class SuccessfulDeploymentResponseHelper {
         fileInfo.originalChecksums = getOriginalChecksums(checksumsInfo);
         fileInfo.path = "/" + repoPath.getPath();
         fileInfo.repo = repoPath.getRepoKey();
-        fileInfo.size = deployedInfo.getSize();
+        fileInfo.size = String.valueOf(deployedInfo.getSize());
         fileInfo.slf = url;
         return fileInfo;
     }
