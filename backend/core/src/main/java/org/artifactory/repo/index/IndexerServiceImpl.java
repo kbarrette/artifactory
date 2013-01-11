@@ -234,9 +234,11 @@ public class IndexerServiceImpl implements InternalIndexerService {
             excludedRepositories = calcSpecificRepoForIndexing(settings.getRepoKeys());
         }
 
-        log.info("Starting repositories indexing...");
+        log.info("Excluded repositories: {}", excludedRepositories);
         List<RealRepo> indexedRepos = getNonVirtualRepositoriesToIndex(excludedRepositories);
+        log.info("Non virtual repositories to index: {}", indexedRepos);
 
+        log.info("Starting repositories indexing...");
         //Do the indexing work
         for (RealRepo indexedRepo : indexedRepos) {
             //Check if we need to stop/suspend
