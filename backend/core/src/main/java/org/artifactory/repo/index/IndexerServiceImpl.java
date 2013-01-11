@@ -485,4 +485,8 @@ public class IndexerServiceImpl implements InternalIndexerService {
     public void saveIndexFiles(MavenIndexManager mavenIndexManager) {
         mavenIndexManager.saveIndexFiles();
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 68ce71bfa57ae8ae2e68c6b81e9c46896bdf984d
