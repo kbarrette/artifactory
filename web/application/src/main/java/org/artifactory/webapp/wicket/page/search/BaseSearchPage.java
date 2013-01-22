@@ -112,7 +112,14 @@ public abstract class BaseSearchPage extends AuthenticatedPage {
         tabs.add(new AbstractTab(Model.of("GAVC Search")) {
             @Override
             public Panel getPanel(String panelId) {
-                return new GavcSearchPanel(BaseSearchPage.this, panelId);
+                                /**
+                 * Make a copy of the query and don't pass the original, so that the state won't be preserved.
+                 * See http://issues.jfrog.org/jira/browse/RTFACT-2790
+                 */
+                String query = searchQuery;
+                GavcSearchPanel searchPanel = new GavcSearchPanel(BaseSearchPage.this, panelId, query);
+                searchQuery = null;
+                return searchPanel;
             }
         });
 
