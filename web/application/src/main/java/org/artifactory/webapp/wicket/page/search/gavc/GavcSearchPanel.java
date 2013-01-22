@@ -41,6 +41,10 @@ import java.util.List;
 
 import static org.artifactory.common.wicket.util.ComponentPersister.setPersistent;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import org.apache.commons.lang.StringUtils;
+
 /**
  * Displays the GAVC searcher
  *
@@ -50,8 +54,24 @@ public class GavcSearchPanel extends BaseSearchPanel<GavcSearchResult> {
 
     private GavcSearchControls searchControls;
 
+    private final String query;
+
     public GavcSearchPanel(final Page parent, String id) {
         super(parent, id);
+        this.query = null;
+    }
+
+    public GavcSearchPanel(final Page parent, String id, String query) {
+        super(parent, id);
+        this.query = query;
+        if (!StringUtils.isEmpty(query)) {
+            GavcQueryToMap gavcQueryToMap = new GavcQueryToMap(query);
+            searchControls.setGroupId(gavcQueryToMap.getGroupId());
+            searchControls.setArtifactId(gavcQueryToMap.getArtifactId());
+            searchControls.setVersion(gavcQueryToMap.getVersion());
+            searchControls.setClassifier(gavcQueryToMap.getClassifier());
+            fetchResults(parent);
+        }
     }
 
     @Override
@@ -72,20 +92,26 @@ public class GavcSearchPanel extends BaseSearchPanel<GavcSearchResult> {
         TextField groupIdField = new TextField<String>("groupIdField",
                 new PropertyModel<String>(searchControls, "groupId"));
         groupIdField.setOutputMarkupId(true);
-        setPersistent(groupIdField);
+        if (query != null) {
+            setPersistent(groupIdField);
+        }
         form.add(groupIdField);
         form.add(new HelpBubble("groupIdHelp", "The Group ID of the artifact. * and ? are accepted."));
 
         TextField artifactIdField = new TextField<String>("artifactIdField",
                 new PropertyModel<String>(searchControls, "artifactId"));
         artifactIdField.setOutputMarkupId(true);
-        setPersistent(artifactIdField);
+        if (query != null) {
+            setPersistent(artifactIdField);
+        }
         form.add(artifactIdField);
         form.add(new HelpBubble("artifactIdHelp", "The Artifact ID of the artifact. * and ? are accepted."));
 
         TextField versionField = new TextField<String>("versionField",
                 new PropertyModel<String>(searchControls, "version"));
-        setPersistent(versionField);
+        if (query != null) {
+            setPersistent(versionField);
+        }
         versionField.setOutputMarkupId(true);
         form.add(versionField);
         form.add(new HelpBubble("versionHelp", "The version of the artifact. * and ? are accepted."));
@@ -93,7 +119,9 @@ public class GavcSearchPanel extends BaseSearchPanel<GavcSearchResult> {
         TextField classifierField = new TextField<String>("classifierField",
                 new PropertyModel<String>(searchControls, "classifier"));
         classifierField.setOutputMarkupId(true);
-        setPersistent(classifierField);
+        if (query != null) {
+            setPersistent(classifierField);
+        }
         form.add(classifierField);
         form.add(new HelpBubble("classifierHelp", "The classifier of the artifact. * and ? are accepted."));
     }
