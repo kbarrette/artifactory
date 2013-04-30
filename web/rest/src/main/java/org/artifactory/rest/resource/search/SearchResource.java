@@ -20,6 +20,7 @@ package org.artifactory.rest.resource.search;
 
 import org.artifactory.addon.AddonsManager;
 import org.artifactory.addon.rest.RestAddon;
+import org.artifactory.api.repo.RepositoryBrowsingService;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.rest.constant.SearchRestConstants;
 import org.artifactory.api.search.SearchService;
@@ -64,6 +65,9 @@ public class SearchResource {
     RepositoryService repositoryService;
 
     @Autowired
+    RepositoryBrowsingService repoBrowsingService;
+
+    @Autowired
     AddonsManager addonsManager;
 
     /**
@@ -73,7 +77,8 @@ public class SearchResource {
      */
     @Path(SearchRestConstants.PATH_ARTIFACT)
     public ArtifactSearchResource artifactQuery() {
-        return new ArtifactSearchResource(authorizationService, searchService, repositoryService, request, response);
+        return new ArtifactSearchResource(authorizationService, searchService, repositoryService, repoBrowsingService,
+                request, response);
     }
 
     /**
@@ -93,7 +98,8 @@ public class SearchResource {
      */
     @Path(SearchRestConstants.PATH_GAVC)
     public GavcSearchResource gavcQuery() {
-        return new GavcSearchResource(authorizationService, searchService, repositoryService, request, response);
+        return new GavcSearchResource(authorizationService, searchService, repositoryService, repoBrowsingService,
+                request, response);
     }
 
     /**
@@ -103,17 +109,8 @@ public class SearchResource {
      */
     @Path(SearchRestConstants.PATH_PROPERTY)
     public PropertySearchResource propertyQuery() {
-        return new PropertySearchResource(authorizationService, searchService, repositoryService, request, response);
-    }
-
-    /**
-     * Delegates the request to the metadata search resource
-     *
-     * @return Metadata search resource
-     */
-    @Path(SearchRestConstants.PATH_XPATH)
-    public XpathSearchResource metadataQuery() {
-        return new XpathSearchResource(authorizationService, searchService, repositoryService, request, response);
+        return new PropertySearchResource(authorizationService, searchService, repositoryService, repoBrowsingService,
+                request, response);
     }
 
     /**
@@ -151,7 +148,8 @@ public class SearchResource {
     @Path(SearchRestConstants.PATH_CHECKSUM)
     public ChecksumSearchResource checksumSearch() {
         RestAddon restAddon = addonsManager.addonByType(RestAddon.class);
-        return new ChecksumSearchResource(authorizationService, restAddon, repositoryService, request, response);
+        return new ChecksumSearchResource(authorizationService, restAddon, repositoryService, repoBrowsingService,
+                request, response);
     }
 
     @Path(SearchRestConstants.PATH_BAD_CHECKSUM)
@@ -183,25 +181,4 @@ public class SearchResource {
         RestAddon restAddon = addonsManager.addonByType(RestAddon.class);
         return new BuildArtifactsSearchResource(restAddon, authorizationService, request, response);
     }
-
-    /**
-     * Searches the repository and returns a plain text result
-     *
-     * @param searchQuery The search query
-     * @return String - Plain text response
-     */
-    /*@GET
-    @Produces("text/plain")
-    public String searchAsText(@QueryParam(QUERY_PREFIX) String searchQuery) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Artifactory REST API search\n");
-        sb.append("============================\n");
-        if ((searchQuery == null) || ("".equals(searchQuery))) {
-            sb.append("'query' parameter is either empty or non existant");
-            return sb.toString();
-        }
-        SearchHelper searchHelper = new SearchHelper(searchService, null);
-        String searchResult = searchHelper.searchPlainText(sb, searchQuery);
-        return searchResult;
-    }*/
 }

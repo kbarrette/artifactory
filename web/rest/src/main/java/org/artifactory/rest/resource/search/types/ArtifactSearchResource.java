@@ -19,6 +19,7 @@
 package org.artifactory.rest.resource.search.types;
 
 import org.apache.commons.lang.StringUtils;
+import org.artifactory.api.repo.RepositoryBrowsingService;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.rest.constant.SearchRestConstants;
 import org.artifactory.api.rest.search.result.InfoRestSearchResult;
@@ -27,11 +28,10 @@ import org.artifactory.api.search.SearchService;
 import org.artifactory.api.search.artifact.ArtifactSearchControls;
 import org.artifactory.api.search.artifact.ArtifactSearchResult;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.fs.FileInfo;
 import org.artifactory.fs.ItemInfo;
 import org.artifactory.rest.common.list.StringList;
-import org.artifactory.rest.util.FileStorageInfoHelper;
 import org.artifactory.rest.util.RestUtils;
+import org.artifactory.rest.util.StorageInfoHelper;
 import org.artifactory.sapi.common.RepositoryRuntimeException;
 
 import javax.servlet.http.HttpServletRequest;
@@ -53,21 +53,24 @@ public class ArtifactSearchResource {
     private AuthorizationService authorizationService;
     private SearchService searchService;
     private RepositoryService repositoryService;
+    private RepositoryBrowsingService repoBrowsingService;
     private HttpServletRequest request;
     private HttpServletResponse response;
 
     /**
      * Main constructor
      *
-     * @param searchService     Search service instance
+     * @param searchService       Search service instance
      * @param repositoryService
-     * @param uriInfo
+     * @param repoBrowsingService
      */
     public ArtifactSearchResource(AuthorizationService authorizationService, SearchService searchService,
-            RepositoryService repositoryService, HttpServletRequest request, HttpServletResponse response) {
+            RepositoryService repositoryService, RepositoryBrowsingService repoBrowsingService,
+            HttpServletRequest request, HttpServletResponse response) {
         this.authorizationService = authorizationService;
         this.searchService = searchService;
         this.repositoryService = repositoryService;
+        this.repoBrowsingService = repoBrowsingService;
         this.request = request;
         this.response = response;
     }
@@ -121,11 +124,9 @@ public class ArtifactSearchResource {
         InfoRestSearchResult result = new InfoRestSearchResult();
         for (ArtifactSearchResult searchResult : searchResults.getResults()) {
             ItemInfo itemInfo = searchResult.getItemInfo();
-            if (!itemInfo.isFolder()) {
-                FileStorageInfoHelper fileStorageInfoHelper = new FileStorageInfoHelper(request, repositoryService,
-                        (FileInfo) itemInfo);
-                result.results.add(fileStorageInfoHelper.createFileInfoData());
-            }
+            StorageInfoHelper storageInfoHelper = new StorageInfoHelper(request, repositoryService, repoBrowsingService,
+                    itemInfo);
+            result.results.add(storageInfoHelper.createStorageInfo());
         }
         return result;
     }

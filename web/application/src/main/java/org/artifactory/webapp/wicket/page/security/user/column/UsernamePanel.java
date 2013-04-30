@@ -68,7 +68,6 @@ public class UsernamePanel extends Panel {
         }
 
         Set<UserGroupInfo> userGroups = userModel.getGroups();
-        provider.addExternalGroups(username, userModel.getRealm(), userGroups);
 
         DeletableLabelGroup<UserGroupInfo> groups =
                 new DeletableLabelGroup<UserGroupInfo>("groups", userGroups) {

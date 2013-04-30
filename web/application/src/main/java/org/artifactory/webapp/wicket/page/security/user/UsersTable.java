@@ -19,33 +19,37 @@
 package org.artifactory.webapp.wicket.page.security.user;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.wicket.ajax.AjaxEventBehavior;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.extensions.markup.html.repeater.data.grid.ICellPopulator;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.IColumn;
 import org.apache.wicket.extensions.markup.html.repeater.data.table.PropertyColumn;
+import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.markup.html.link.AbstractLink;
 import org.apache.wicket.markup.repeater.Item;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
+import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
-import org.artifactory.addon.wicket.SamlAddon;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.api.security.UserAwareAuthenticationProvider;
 import org.artifactory.api.security.UserGroupService;
 import org.artifactory.common.wicket.behavior.CssClass;
+import org.artifactory.common.wicket.behavior.JavascriptEvent;
+import org.artifactory.common.wicket.behavior.tooltip.TooltipBehavior;
 import org.artifactory.common.wicket.component.CreateUpdateAction;
-import org.artifactory.common.wicket.component.label.tooltip.TooltipLabel;
 import org.artifactory.common.wicket.component.modal.links.ModalShowLink;
 import org.artifactory.common.wicket.component.modal.panel.BaseModalPanel;
 import org.artifactory.common.wicket.component.panel.list.ModalListPanel;
 import org.artifactory.common.wicket.component.table.columns.BooleanColumn;
 import org.artifactory.common.wicket.component.table.columns.TooltipLabelColumn;
 import org.artifactory.common.wicket.component.table.columns.checkbox.SelectAllCheckboxColumn;
-import org.artifactory.log.LoggerFactory;
 import org.artifactory.security.AccessLogger;
+import org.artifactory.security.UserGroupInfo;
 import org.artifactory.webapp.wicket.page.security.user.column.UserColumn;
 import org.artifactory.webapp.wicket.page.security.user.permission.UserPermissionsPanel;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -87,7 +91,16 @@ public class UsersTable extends ModalListPanel<UserModel> {
 
     @Override
     protected void addColumns(List<? super IColumn<UserModel>> columns) {
-        columns.add(new SelectAllCheckboxColumn<UserModel>("", "selected", null) {
+        columns.add(createSelectedColumn());
+        columns.add(new UserColumn("User Name"));
+        columns.add(createRealmColumn());
+        columns.add(new BooleanColumn<UserModel>("Admin", "admin", "admin"));
+        columns.add(new PropertyColumn<UserModel>(Model.of("Last Login"), "lastLoginTimeMillis", "lastLoginString"));
+        columns.add(createExternalStatusColumn());
+    }
+
+    private SelectAllCheckboxColumn<UserModel> createSelectedColumn() {
+        return new SelectAllCheckboxColumn<UserModel>("", "selected", null) {
 
             @Override
             protected boolean isEnabled(UserModel userModel) {
@@ -100,12 +113,27 @@ public class UsersTable extends ModalListPanel<UserModel> {
                 //Make the user's selection state affected by the select all checkbox only if it's not anonymous
                 return !userModel.isAnonymous();
             }
-        });
-        columns.add(new UserColumn("User Name"));
-        columns.add(createExternalStatusColumn());
-        columns.add(new BooleanColumn<UserModel>("Admin", "admin", "admin"));
-        columns.add(new PropertyColumn<UserModel>(Model.of("Last Login"), "lastLoginTimeMillis",
-                "lastLoginString"));
+        };
+    }
+
+    private PropertyColumn<UserModel> createRealmColumn() {
+        return new PropertyColumn<UserModel>(Model.of("Realm"), "realm", "realm") {
+            @Override
+            public void populateItem(Item<ICellPopulator<UserModel>> item, String componentId,
+                    final IModel<UserModel> model) {
+                String realm;
+                UserModel userModel = model.getObject();
+                if (userModel.isAnonymous()) {
+                    realm = "";
+                } else if (StringUtils.isBlank(userModel.getRealm())) {
+                    realm = "Will be updated on next login";
+                    item.add(new CssClass("gray-listed-label"));
+                } else {
+                    realm = StringUtils.capitalize(userModel.getRealm());
+                }
+                item.add(new Label(componentId, Model.of(realm)));
+            }
+        };
     }
 
     @Override
@@ -115,43 +143,82 @@ public class UsersTable extends ModalListPanel<UserModel> {
     }
 
     private TooltipLabelColumn<UserModel> createExternalStatusColumn() {
-        return new TooltipLabelColumn<UserModel>(Model.of("Realm"), "realm", "status.description", 0) {
+        return new TooltipLabelColumn<UserModel>(Model.of("External Realm Status"), "status", "status", 0) {
             @Override
-            public void populateItem(Item<ICellPopulator<UserModel>> item, String componentId,
-                    final IModel<UserModel> model) {
-                item.add(new TooltipLabel(componentId, createLabelModel(model), 0) {
-                    @Override
-                    protected void onBeforeRender() {
-                        super.onBeforeRender();
-                        UserModel userModel = model.getObject();
-
-                        if (userModel.isAnonymous()) {
-                            setText("");
-                        } else if (StringUtils.isBlank(userModel.getRealm())) {
-                            setText("Will be updated on next login");
-                            add(new CssClass("gray-listed-label"));
-                        } else {
-                            setText(StringUtils.capitalize(userModel.getRealm()));
-                        }
-                    }
-                });
-                UserModel user = model.getObject();
-                log.debug("User '{}' is from realm '{}'", user.getUsername(), user.getRealm());
-                if ("internal".equals(user.getRealm())) {
-                    user.setStatus(UserModel.Status.NOT_EXTERNAL_USER);
-                } else if ("system".equals(user.getRealm())) {
-                    user.setStatus(UserModel.Status.ACTIVE_USER);
+            public void populateItem(Item<ICellPopulator<UserModel>> item, final String componentId,
+                    IModel<UserModel> model) {
+                final UserModel user = model.getObject();
+                if (isExternalUser(user)) {
+                    createExternalUserComponent(item, componentId, user);
                 } else {
-                    if (SamlAddon.REALM.equals(user.getRealm()) || provider.userExists(user.getUsername(),
-                            user.getRealm())) {
-                        user.setStatus(UserModel.Status.ACTIVE_USER);
-                    } else {
-                        user.setStatus(UserModel.Status.INACTIVE_USER);
-                        item.add(new CssClass("black-listed-label"));
-                    }
+                    createLocalUserLabel(item, componentId);
                 }
             }
         };
+    }
+
+    private void createLocalUserLabel(Item<ICellPopulator<UserModel>> item, String componentId) {
+        // Create empty label ( o need to check the user status in remote servers).
+        final Model emptyText = Model.of("");
+        final Label constantLabel = new Label(componentId, emptyText);
+        constantLabel.add(new CssClass("item-link"));
+        item.add(constantLabel);
+    }
+
+    private boolean isExternalUser(UserModel user) {
+        return !("internal".equals(user.getRealm()) || "system".equals(
+                user.getRealm()) || user.getRealm() == null || user.getRealm().isEmpty() || user.isAnonymous());
+    }
+
+    private void createExternalUserComponent(final Item<ICellPopulator<UserModel>> item, final String componentId,
+            final UserModel user) {
+        // Create "action label" which allows to check the user status in remote server, by clicking the "action label".
+        log.debug("User '{}' is from realm '{}'", user.getUsername(), user.getRealm());
+        if (user.getStatus() == null) {
+            final Model<String> m = Model.of("Check external status");
+            final Label actionLabel = new Label(componentId, m);
+            actionLabel.add(new CssClass("item-link"));
+            item.add(actionLabel);
+            item.add(new AjaxEventBehavior("onClick") {
+                @Override
+                protected void onEvent(final AjaxRequestTarget target) {
+
+                    log.debug("User '{}' is from realm '{}'", user.getUsername(), user.getRealm());
+                    Label statusLabel = createStatusComponent(user, componentId);
+                    actionLabel.replaceWith(statusLabel);
+                    target.add(item);
+                    Set<UserGroupInfo> userGroups = user.getGroups();
+                    provider.addExternalGroups(user.getUsername(), user.getRealm(), userGroups);
+                    user.addGroups(userGroups);
+                    target.add(UsersTable.this);
+
+                }
+            });
+            // TODO find better way to implement te following code.
+            // The following code (LinksColumn.current.hide()) hides the row's link panel (edit delete permissions panel).
+            // Note: refreshing the table without hiding the link will cause the link panel to stay stuck on the screen
+            item.add(new JavascriptEvent("onmousedown", "LinksColumn.current.hide();"));
+        } else {
+            Label statusLabel = createStatusComponent(user, componentId);
+            item.add(statusLabel);
+        }
+    }
+
+    private Label createStatusComponent(UserModel user, String componentId) {
+        Label statusLabel;
+        if (provider.userExists(user.getUsername(), user.getRealm())) {
+            user.setStatus(UserModel.Status.ACTIVE_USER);
+            final Model status = Model.of("Active user");
+            statusLabel = new Label(componentId, status);
+        } else {
+            user.setStatus(UserModel.Status.INACTIVE_USER);
+            final Model status = Model.of("Inactive user");
+            statusLabel = new Label(componentId, status);
+            statusLabel.add(new CssClass("black-listed-label"));
+        }
+        TooltipBehavior tooltipBehavior = new TooltipBehavior(new PropertyModel(user, "status.description"));
+        statusLabel.add(tooltipBehavior);
+        return statusLabel;
     }
 
     @Override

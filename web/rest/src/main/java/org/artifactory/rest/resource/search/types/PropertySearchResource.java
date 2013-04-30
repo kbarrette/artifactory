@@ -18,6 +18,7 @@
 
 package org.artifactory.rest.resource.search.types;
 
+import org.artifactory.api.repo.RepositoryBrowsingService;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.rest.constant.SearchRestConstants;
 import org.artifactory.api.rest.search.result.InfoRestSearchResult;
@@ -26,11 +27,10 @@ import org.artifactory.api.search.SearchService;
 import org.artifactory.api.search.property.PropertySearchControls;
 import org.artifactory.api.search.property.PropertySearchResult;
 import org.artifactory.api.security.AuthorizationService;
-import org.artifactory.fs.FileInfo;
 import org.artifactory.fs.ItemInfo;
 import org.artifactory.rest.common.list.StringList;
-import org.artifactory.rest.util.FileStorageInfoHelper;
 import org.artifactory.rest.util.RestUtils;
+import org.artifactory.rest.util.StorageInfoHelper;
 import org.artifactory.sapi.common.RepositoryRuntimeException;
 
 import javax.servlet.http.HttpServletRequest;
@@ -55,14 +55,17 @@ public class PropertySearchResource {
     private AuthorizationService authorizationService;
     private SearchService searchService;
     private RepositoryService repositoryService;
+    private RepositoryBrowsingService repoBrowsingService;
     private HttpServletRequest request;
     private HttpServletResponse response;
 
     public PropertySearchResource(AuthorizationService authorizationService, SearchService searchService,
-            RepositoryService repositoryService, HttpServletRequest request, HttpServletResponse response) {
+            RepositoryService repositoryService, RepositoryBrowsingService repoBrowsingService,
+            HttpServletRequest request, HttpServletResponse response) {
         this.authorizationService = authorizationService;
         this.searchService = searchService;
         this.repositoryService = repositoryService;
+        this.repoBrowsingService = repoBrowsingService;
         this.request = request;
         this.response = response;
     }
@@ -121,11 +124,9 @@ public class PropertySearchResource {
         InfoRestSearchResult infoSearchResult = new InfoRestSearchResult();
         for (PropertySearchResult result : results) {
             ItemInfo itemInfo = result.getItemInfo();
-            if (!itemInfo.isFolder()) {
-                FileStorageInfoHelper fileStorageInfoHelper = new FileStorageInfoHelper(request, repositoryService,
-                        (FileInfo) itemInfo);
-                infoSearchResult.results.add(fileStorageInfoHelper.createFileInfoData());
-            }
+            StorageInfoHelper storageInfoHelper = new StorageInfoHelper(request, repositoryService, repoBrowsingService,
+                    itemInfo);
+            infoSearchResult.results.add(storageInfoHelper.createStorageInfo());
         }
         return infoSearchResult;
     }

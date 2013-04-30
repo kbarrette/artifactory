@@ -1,15 +1,39 @@
 @echo off
+rem Licensed to the Apache Software Foundation (ASF) under one or more
+rem contributor license agreements.  See the NOTICE file distributed with
+rem this work for additional information regarding copyright ownership.
+rem The ASF licenses this file to You under the Apache License, Version 2.0
+rem (the "License"); you may not use this file except in compliance with
+rem the License.  You may obtain a copy of the License at
+rem
+rem     http://www.apache.org/licenses/LICENSE-2.0
+rem
+rem Unless required by applicable law or agreed to in writing, software
+rem distributed under the License is distributed on an "AS IS" BASIS,
+rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+rem See the License for the specific language governing permissions and
+rem limitations under the License.
 
+if "%OS%" == "Windows_NT" setlocal
 set "CURRENT_DIR=%cd%"
 cd ..
-set "ARTIFACTORY_HOME=%cd%"
-cd "%CURRENT_DIR%"
+set ARTIFACTORY_HOME=%cd%
+set CATALINA_HOME=%cd%\tomcat
+set CATALINA_BASE=%CATALINA_HOME%
 
-::--
+set "EXECUTABLE=%ARTIFACTORY_HOME%\bin\artifactory-service.exe"
 set SERVICE_NAME=Artifactory
-set EXECUTABLE=%ARTIFACTORY_HOME%\bin\artifactory-service.exe
+set PR_DISPLAYNAME=Artifactory
+set PR_DESCRIPTION=Artifactory Binary Repository
+set STARTUP_TYPE=auto
 
-::-- Make sure prerequisite environment variables are set
+set "JOPTS=-Xms512m;-Xmx2g;-Xss256k;-XX:PermSize=128m;-XX:MaxPermSize=128m;-XX:+UseG1GC"
+set "PR_LOGPATH=%ARTIFACTORY_HOME%\logs"
+set "PR_CLASSPATH=%CATALINA_HOME%\bin\bootstrap.jar;%CATALINA_HOME%\bin\tomcat-juli.jar"
+set PR_STDOUTPUT=auto
+set PR_STDERROR=auto
+
+rem Make sure prerequisite environment variables are set
 if not "%JAVA_HOME%" == "" goto gotJdkHome
 if not "%JRE_HOME%" == "" goto gotJreHome
 echo Neither the JAVA_HOME nor the JRE_HOME environment variable is defined
@@ -32,43 +56,37 @@ echo This environment variable is needed to run this program
 echo NB: JAVA_HOME should point to a JDK not a JRE
 goto end
 :okJavaHome
-
-::-- The fully qualified start and stop classes
-set START_CLASS=org.artifactory.standalone.main.Main
-set STOP_CLASS=org.artifactory.standalone.main.Main
-
-::-- The classpath for all jars needed to run your service
-set LIB_DIR=%ARTIFACTORY_HOME%\lib\*
-set CLASSPATH=%ARTIFACTORY_HOME%\artifactory.jar;%LIB_DIR%
-
-::-- Set to auto if you want the service to startup automatically.
-set STARTUP_TYPE=auto
-
-::---- Set other options via environment variables -------
-
 rem Set the server jvm from JAVA_HOME
-set "JVM_PATH=%JRE_HOME%\bin\server\jvm.dll"
-if exist "%JVM_PATH%" goto foundJvm
+set "PR_JVM=%JRE_HOME%\bin\server\jvm.dll"
+if exist "%PR_JVM%" goto foundJvm
 rem Set the client jvm from JAVA_HOME
-set "JVM_PATH=%JRE_HOME%\bin\client\jvm.dll"
-if exist "%JVM_PATH%" goto foundJvm
-set JVM_PATH=auto
-
+set "PR_JVM=%JRE_HOME%\bin\client\jvm.dll"
+if exist "%PR_JVM%" goto foundJvm
+set PR_JVM=auto
 :foundJvm
-::---- Install the Service -------
-echo Installing service '%SERVICE_NAME%' ...
-echo JAVA_HOME:        "%JAVA_HOME%"
-echo JRE_HOME:         "%JRE_HOME%"
-echo JVM:              "%JVM_PATH%"
 
-::--- To redirect the stdout to a file add '--StdOutput artifactory-stdout' to the command
-"%EXECUTABLE%" //IS//%SERVICE_NAME% --StartClass %START_CLASS% --StopClass %STOP_CLASS% --StopMethod stop --StartMode jvm --StopMode jvm --Install %EXECUTABLE%
+:doInstall
+rem Install the service
+echo Installing the service '%SERVICE_NAME%' ...
+echo Using CATALINA_HOME:    "%CATALINA_HOME%"
+echo Using CATALINA_BASE:    "%CATALINA_BASE%"
+echo Using JAVA_HOME:        "%JAVA_HOME%"
+echo Using JRE_HOME:         "%JRE_HOME%"
+echo Using JVM:              "%PR_JVM%"
+
+"%EXECUTABLE%" //IS//%SERVICE_NAME% --StartClass org.apache.catalina.startup.Bootstrap --StopClass org.apache.catalina.startup.Bootstrap --StartParams start --StopParams stop
 if not errorlevel 1 goto installed
+echo Failed installing '%SERVICE_NAME%' service
 goto end
 
 :installed
-::--- Clear the environment variables. They are not needed any more.
-"%EXECUTABLE%" //US/%SERVICE_NAME% --DisplayName Artifactory --Description "Artifactory Binary Repository" --Jvm "%JVM_PATH%" --Classpath %CLASSPATH% --LogPrefix artifactory-service --LogPath="%ARTIFACTORY_HOME%\logs" --Startup %STARTUP_TYPE% --StdError artifactory-stderr ++JvmOptions "-XX:PermSize=128m;-XX:MaxPermSize=128m;-XX:NewSize=512m;-XX:MaxNewSize=512m;-XX:+UseConcMarkSweepGC;-Dartifactory.home=%ARTIFACTORY_HOME%;-Djava.io.tmpdir=%ARTIFACTORY_HOME%\work" --JvmMs 1024 --JvmMx 1024
+"%EXECUTABLE%" //US//%SERVICE_NAME% --JvmOptions "-Dcatalina.base=%CATALINA_BASE%;-Dcatalina.home=%CATALINA_HOME%;-Djava.endorsed.dirs=%CATALINA_HOME%\endorsed" --StartMode jvm --StopMode jvm
+"%EXECUTABLE%" //US//%SERVICE_NAME% ++JvmOptions "-Djava.io.tmpdir=%CATALINA_BASE%\temp;-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager;-Djava.util.logging.config.file=%CATALINA_BASE%\conf\logging.properties"
+"%EXECUTABLE%" //US//%SERVICE_NAME% ++JvmOptions "-Dartifactory.home=%ARTIFACTORY_HOME%" --Startup %STARTUP_TYPE% --LogPrefix artifactory-service
+"%EXECUTABLE%" //US//%SERVICE_NAME% ++JvmOptions %JOPTS%
+rem --JvmMs 128 --JvmMx 256
+
 echo The service '%SERVICE_NAME%' has been installed.
 
 :end
+cd "%CURRENT_DIR%"

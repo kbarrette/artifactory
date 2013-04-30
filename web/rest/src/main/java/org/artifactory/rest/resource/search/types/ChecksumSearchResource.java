@@ -22,16 +22,17 @@ import org.apache.commons.httpclient.HttpStatus;
 import org.artifactory.addon.rest.AuthorizationRestException;
 import org.artifactory.addon.rest.MissingRestAddonException;
 import org.artifactory.addon.rest.RestAddon;
+import org.artifactory.api.repo.RepositoryBrowsingService;
 import org.artifactory.api.repo.RepositoryService;
 import org.artifactory.api.rest.constant.SearchRestConstants;
 import org.artifactory.api.rest.search.result.InfoRestSearchResult;
 import org.artifactory.api.security.AuthorizationService;
 import org.artifactory.fs.FileInfo;
-import org.artifactory.log.LoggerFactory;
 import org.artifactory.repo.RepoPath;
 import org.artifactory.rest.common.list.StringList;
-import org.artifactory.rest.util.FileStorageInfoHelper;
+import org.artifactory.rest.util.StorageInfoHelper;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -54,14 +55,17 @@ public class ChecksumSearchResource {
 
     private RestAddon restAddon;
     private RepositoryService repositoryService;
+    private RepositoryBrowsingService repoBrowsingService;
     private HttpServletRequest request;
     private HttpServletResponse response;
 
     public ChecksumSearchResource(AuthorizationService authorizationService, RestAddon restAddon,
-            RepositoryService repositoryService, HttpServletRequest request, HttpServletResponse response) {
+            RepositoryService repositoryService, RepositoryBrowsingService repoBrowsingService,
+            HttpServletRequest request, HttpServletResponse response) {
         this.authorizationService = authorizationService;
         this.restAddon = restAddon;
         this.repositoryService = repositoryService;
+        this.repoBrowsingService = repoBrowsingService;
         this.request = request;
         this.response = response;
     }
@@ -106,9 +110,9 @@ public class ChecksumSearchResource {
         InfoRestSearchResult resultToReturn = new InfoRestSearchResult();
         for (RepoPath matchingArtifact : matchingArtifacts) {
             FileInfo fileInfo = repositoryService.getFileInfo(matchingArtifact);
-            FileStorageInfoHelper fileStorageInfoHelper = new FileStorageInfoHelper(request, repositoryService,
+            StorageInfoHelper storageInfoHelper = new StorageInfoHelper(request, repositoryService, repoBrowsingService,
                     fileInfo);
-            resultToReturn.results.add(fileStorageInfoHelper.createFileInfoData());
+            resultToReturn.results.add(storageInfoHelper.createStorageInfo());
         }
 
         return resultToReturn;
